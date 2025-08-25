@@ -172,9 +172,16 @@ async function syncJiraData(config: JiraConfig, supabaseClient: any) {
     // Sync projects
     const projectsResult = await syncProjects(config, authHeader, supabaseClient);
     
+    // Determine which projects to sync issues for
+    const projectKeysToSync = config.project_keys.length > 0 
+      ? config.project_keys 
+      : projectsResult.project_keys; // Use all found projects if no specific ones configured
+    
+    console.log(`Syncing issues for projects: ${projectKeysToSync.join(', ')}`);
+    
     // Sync issues for each project
     const issuesResults = [];
-    for (const projectKey of config.project_keys) {
+    for (const projectKey of projectKeysToSync) {
       const issuesResult = await syncIssues(config, projectKey, authHeader, supabaseClient);
       issuesResults.push(issuesResult);
     }
@@ -245,13 +252,17 @@ async function syncProjects(config: JiraConfig, authHeader: string, supabaseClie
 }
 
 async function syncIssues(config: JiraConfig, projectKey: string, authHeader: string, supabaseClient: any) {
+  console.log(`Starting sync for project: ${projectKey}`);
   let startAt = 0;
   const maxResults = 100;
   let totalIssues = 0;
 
   do {
-    const jql = `project = ${projectKey} ORDER BY updated DESC`;
-    const url = `${config.jira_url}/rest/api/3/search?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}`;
+    // Use quotes around project key in case it has special characters
+    const jql = `project = "${projectKey}" ORDER BY updated DESC`;
+    const url = `${config.jira_url}/rest/api/3/search?jql=${encodeURIComponent(jql)}&startAt=${startAt}&maxResults=${maxResults}&expand=names`;
+    
+    console.log(`Fetching issues from: ${url}`);
     
     const response = await fetch(url, {
       headers: {
@@ -261,53 +272,69 @@ async function syncIssues(config: JiraConfig, projectKey: string, authHeader: st
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch issues for ${projectKey}: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Failed to fetch issues for ${projectKey}: ${response.status} - ${errorText}`);
+      throw new Error(`Failed to fetch issues for ${projectKey}: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    const issues: JiraIssue[] = data.issues;
+    console.log(`Found ${data.issues?.length || 0} issues out of ${data.total || 0} total for project ${projectKey}`);
+    
+    const issues: JiraIssue[] = data.issues || [];
 
-    if (issues.length === 0) break;
+    if (issues.length === 0) {
+      console.log(`No more issues found for project ${projectKey}`);
+      break;
+    }
 
-    const upsertPromises = issues.map(issue => 
-      supabaseClient
+    console.log(`Processing ${issues.length} issues for project ${projectKey}`);
+
+    const upsertPromises = issues.map(issue => {
+      console.log(`Processing issue: ${issue.key}`);
+      return supabaseClient
         .from('jira_issues')
         .upsert({
           jira_id: issue.id,
           jira_key: issue.key,
           summary: issue.fields.summary,
-          description: issue.fields.description,
-          issue_type: issue.fields.issuetype.name,
-          status: issue.fields.status.name,
-          priority: issue.fields.priority?.name,
-          assignee_name: issue.fields.assignee?.displayName,
-          reporter_name: issue.fields.reporter?.displayName,
-          project_key: issue.fields.project.key,
+          description: issue.fields.description || null,
+          issue_type: issue.fields.issuetype?.name || 'Unknown',
+          status: issue.fields.status?.name || 'Unknown',
+          priority: issue.fields.priority?.name || null,
+          assignee_name: issue.fields.assignee?.displayName || null,
+          reporter_name: issue.fields.reporter?.displayName || null,
+          project_key: issue.fields.project?.key || projectKey,
           config_id: config.id,
-          story_points: issue.fields.customfield_10016,
-          original_estimate: issue.fields.timeoriginalestimate,
-          remaining_estimate: issue.fields.timeestimate,
-          time_spent: issue.fields.timespent,
-          created_date: issue.fields.created,
-          updated_date: issue.fields.updated,
-          resolved_date: issue.fields.resolutiondate,
-          labels: issue.fields.labels,
-          components: issue.fields.components.map(c => c.name),
-          fix_versions: issue.fields.fixVersions.map(v => v.name),
+          story_points: issue.fields.customfield_10016 || null,
+          original_estimate: issue.fields.timeoriginalestimate || null,
+          remaining_estimate: issue.fields.timeestimate || null,
+          time_spent: issue.fields.timespent || null,
+          created_date: issue.fields.created || null,
+          updated_date: issue.fields.updated || null,
+          resolved_date: issue.fields.resolutiondate || null,
+          labels: issue.fields.labels || [],
+          components: issue.fields.components?.map(c => c.name) || [],
+          fix_versions: issue.fields.fixVersions?.map(v => v.name) || [],
           raw_data: issue,
           synced_at: new Date().toISOString()
-        }, { onConflict: 'jira_id,config_id' })
-    );
+        }, { onConflict: 'jira_id,config_id' });
+    });
 
-    await Promise.all(upsertPromises);
+    const results = await Promise.all(upsertPromises);
+    console.log(`Upserted ${results.length} issues for project ${projectKey}`);
     
     totalIssues += issues.length;
     startAt += maxResults;
 
-    if (startAt >= data.total) break;
+    // Break if we've processed all available issues  
+    if (startAt >= (data.total || 0)) {
+      console.log(`Reached end of issues for project ${projectKey}. Total processed: ${totalIssues}`);
+      break;
+    }
 
   } while (true);
 
+  console.log(`Completed sync for project ${projectKey}. Total issues: ${totalIssues}`);
   return {
     project_key: projectKey,
     total_issues: totalIssues
