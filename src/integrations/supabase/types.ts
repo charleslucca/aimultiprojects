@@ -831,6 +831,57 @@ export type Database = {
           },
         ]
       }
+      user_project_participations: {
+        Row: {
+          allocation_percentage: number
+          contract_type: Database["public"]["Enums"]["contract_type"]
+          created_at: string
+          end_date: string | null
+          hourly_rate: number | null
+          id: string
+          is_active: boolean
+          jira_project_key: string
+          jira_project_name: string | null
+          monthly_salary: number | null
+          role: Database["public"]["Enums"]["project_role"]
+          start_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          allocation_percentage?: number
+          contract_type: Database["public"]["Enums"]["contract_type"]
+          created_at?: string
+          end_date?: string | null
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          jira_project_key: string
+          jira_project_name?: string | null
+          monthly_salary?: number | null
+          role: Database["public"]["Enums"]["project_role"]
+          start_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          allocation_percentage?: number
+          contract_type?: Database["public"]["Enums"]["contract_type"]
+          created_at?: string
+          end_date?: string | null
+          hourly_rate?: number | null
+          id?: string
+          is_active?: boolean
+          jira_project_key?: string
+          jira_project_name?: string | null
+          monthly_salary?: number | null
+          role?: Database["public"]["Enums"]["project_role"]
+          start_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -839,7 +890,18 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      contract_type: "clt" | "pj" | "freelancer" | "consultant"
+      project_role:
+        | "developer"
+        | "tech_lead"
+        | "scrum_master"
+        | "product_owner"
+        | "designer"
+        | "qa_engineer"
+        | "devops_engineer"
+        | "architect"
+        | "agile_coach"
+        | "business_analyst"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -966,6 +1028,20 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      contract_type: ["clt", "pj", "freelancer", "consultant"],
+      project_role: [
+        "developer",
+        "tech_lead",
+        "scrum_master",
+        "product_owner",
+        "designer",
+        "qa_engineer",
+        "devops_engineer",
+        "architect",
+        "agile_coach",
+        "business_analyst",
+      ],
+    },
   },
 } as const
