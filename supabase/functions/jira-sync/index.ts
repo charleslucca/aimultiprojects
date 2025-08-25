@@ -62,7 +62,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { action, config_id } = await req.json();
+    // Read the request body only once
+    const requestBody = await req.json();
+    const { action, config_id, jira_url, username, api_token } = requestBody;
 
     if (action === 'sync_all') {
       // Get all active Jira configurations
@@ -100,7 +102,16 @@ serve(async (req) => {
     }
 
     if (action === 'test_connection') {
-      const { jira_url, username, api_token } = await req.json();
+      if (!jira_url || !username || !api_token) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          message: 'Missing required fields: jira_url, username, api_token'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
       const result = await testJiraConnection(jira_url, username, api_token);
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
