@@ -43,12 +43,9 @@ export const FileUpload = ({
 
   const uploadFile = async (file: File): Promise<any> => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${projectId}/${fileName}`;
 
-    // Upload to Supabase Storage (bucket would need to be created)
-    // For now, we'll simulate the upload and store metadata in project_attachments
-    
     const uploadFile: UploadFile = {
       file,
       progress: 0,
@@ -59,15 +56,25 @@ export const FileUpload = ({
     setUploadingFiles(prev => [...prev, uploadFile]);
 
     try {
-      // Simulate upload progress
-      for (let i = 0; i <= 100; i += 10) {
+      // Real upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('project-files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      // Simulate progress for UI feedback
+      for (let i = 20; i <= 100; i += 20) {
         await new Promise(resolve => setTimeout(resolve, 100));
         setUploadingFiles(prev => 
           prev.map(f => f.id === uploadFile.id ? { ...f, progress: i } : f)
         );
       }
 
-      // Store file metadata in database
+      // Store file metadata in database with storage path
       const { data, error } = await supabase
         .from('project_attachments')
         .insert([{
@@ -75,7 +82,10 @@ export const FileUpload = ({
           file_name: file.name,
           file_path: filePath,
           file_type: file.type,
-          category: 'document'
+          file_size: file.size,
+          storage_path: uploadData.path,
+          category: 'document',
+          analysis_status: 'pending'
         }])
         .select()
         .single();
@@ -89,18 +99,14 @@ export const FileUpload = ({
 
       // Trigger AI analysis after upload
       try {
-        await fetch('https://kfhhfrsqdvdagmtqxcgu.supabase.co/functions/v1/analyze-project', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtmaGhmcnNxZHZkYWdtdHF4Y2d1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxNDk4NjMsImV4cCI6MjA3MTcyNTg2M30.v-obcZOvFWTiFcDnv_As_cJhnNOUPmCprN-WWZJP5Qo',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            projectId,
+        await supabase.functions.invoke('analyze-file', {
+          body: { 
             attachmentId: data.id,
+            projectId,
             fileName: file.name,
-            fileType: file.type
-          }),
+            fileType: file.type,
+            filePath: uploadData.path
+          }
         });
       } catch (aiError) {
         console.warn('AI analysis failed:', aiError);

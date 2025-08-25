@@ -40,6 +40,11 @@ const navigationItems = [
     icon: FolderOpen,
   },
   {
+    title: 'Cockpit',
+    url: '/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
     title: 'Equipe',
     url: '/team',
     icon: Users,
