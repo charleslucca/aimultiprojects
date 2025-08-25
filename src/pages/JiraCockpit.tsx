@@ -2,17 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Settings, Plus, RefreshCw, BarChart3, AlertTriangle } from 'lucide-react';
+import { Settings, Plus, RefreshCw, BarChart3, AlertTriangle, User } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import JiraConfigModal from '@/components/jira/JiraConfigModal';
 import JiraBoard from '@/components/jira/JiraBoard';
 import AIInsightsPanel from '@/components/jira/AIInsightsPanel';
 import PredictiveCharts from '@/components/jira/PredictiveCharts';
+import UserProjectParticipationModal from '@/components/jira/UserProjectParticipationModal';
 
 const JiraCockpit: React.FC = () => {
   const { toast } = useToast();
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isParticipationModalOpen, setIsParticipationModalOpen] = useState(false);
   const [configurations, setConfigurations] = useState<any[]>([]);
   const [selectedConfig, setSelectedConfig] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -198,6 +200,13 @@ const JiraCockpit: React.FC = () => {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={() => setIsParticipationModalOpen(true)}
+          >
+            <User className="h-4 w-4 mr-2" />
+            Minha Participação
+          </Button>
+          <Button
+            variant="outline"
             onClick={handleSync}
             disabled={isSyncing}
           >
@@ -339,6 +348,12 @@ const JiraCockpit: React.FC = () => {
         onClose={() => setIsConfigModalOpen(false)}
         onSave={handleConfigurationSaved}
         selectedConfig={selectedConfig}
+      />
+
+      <UserProjectParticipationModal
+        isOpen={isParticipationModalOpen}
+        onClose={() => setIsParticipationModalOpen(false)}
+        projects={projects}
       />
     </div>
   );
