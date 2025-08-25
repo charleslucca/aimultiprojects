@@ -10,6 +10,7 @@ import JiraBoard from '@/components/jira/JiraBoard';
 import AIInsightsPanel from '@/components/jira/AIInsightsPanel';
 import PredictiveCharts from '@/components/jira/PredictiveCharts';
 import UserProjectParticipationModal from '@/components/jira/UserProjectParticipationModal';
+import EconomicDashboard from '@/components/jira/EconomicDashboard';
 
 const JiraCockpit: React.FC = () => {
   const { toast } = useToast();
@@ -335,13 +336,22 @@ const JiraCockpit: React.FC = () => {
         </div>
       </div>
 
-      {/* Predictive Charts */}
+      {/* Predictive Charts and Economic Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <PredictiveCharts 
-          issues={issues}
-          insights={insights}
-          projects={projects}
-        />
+        <div>
+          <PredictiveCharts 
+            issues={issues}
+            insights={insights}
+            projects={projects}
+          />
+        </div>
+        <div>
+          <EconomicDashboard 
+            insights={insights}
+            issues={issues}
+            projects={projects}
+          />
+        </div>
       </div>
 
       <JiraConfigModal

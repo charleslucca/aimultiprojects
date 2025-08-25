@@ -154,7 +154,14 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
       });
 
       const aiResponse = await response.json();
-      const analysis = JSON.parse(aiResponse.choices[0].message.content);
+      let content = aiResponse.choices[0].message.content;
+      
+      // Remove markdown formatting if present
+      if (content.includes('```json')) {
+        content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+      }
+      
+      const analysis = JSON.parse(content);
 
       // Store insight in database
       await supabaseClient
@@ -250,7 +257,14 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
       });
 
       const aiResponse = await response.json();
-      const analysis = JSON.parse(aiResponse.choices[0].message.content);
+      let content = aiResponse.choices[0].message.content;
+      
+      // Remove markdown formatting if present
+      if (content.includes('```json')) {
+        content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+      }
+      
+      const analysis = JSON.parse(content);
 
       // Store insight in database
       await supabaseClient
@@ -279,14 +293,16 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
 }
 
 async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string, projectKeys: string[]) {
-  // Get team performance data
-  const { data: issues, error } = await supabaseClient
+  // Get all available project keys if none specified in config
+  const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
+  
+  const { data: issues, error: issuesError } = await supabaseClient
     .from('jira_issues')
     .select('*')
-    .in('project_key', projectKeys)
+    .in('project_key', projectKeysToUse)
     .not('assignee_name', 'is', null);
 
-  if (error) throw error;
+  if (issuesError) throw issuesError;
 
   const teamStats = issues.reduce((stats: any, issue: any) => {
     const assignee = issue.assignee_name;
@@ -350,7 +366,14 @@ async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string,
     });
 
     const aiResponse = await response.json();
-    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+    let content = aiResponse.choices[0].message.content;
+    
+    // Remove markdown formatting if present
+    if (content.includes('```json')) {
+      content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+    }
+    
+    const analysis = JSON.parse(content);
 
     return {
       team_stats: teamStats,
@@ -364,10 +387,13 @@ async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string,
 }
 
 async function suggestPriorityRebalancing(supabaseClient: any, openAIApiKey: string, projectKeys: string[]) {
+  // Get all available project keys if none specified
+  const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
+  
   const { data: issues, error } = await supabaseClient
     .from('jira_issues')
     .select('*')
-    .in('project_key', projectKeys)
+    .in('project_key', projectKeysToUse)
     .not('status', 'eq', 'Done');
 
   if (error) throw error;
@@ -413,7 +439,14 @@ async function suggestPriorityRebalancing(supabaseClient: any, openAIApiKey: str
     });
 
     const aiResponse = await response.json();
-    return JSON.parse(aiResponse.choices[0].message.content);
+    let content = aiResponse.choices[0].message.content;
+    
+    // Remove markdown formatting if present
+    if (content.includes('```json')) {
+      content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+    }
+    
+    return JSON.parse(content);
 
   } catch (error) {
     console.error('Failed to suggest priority rebalancing:', error);
@@ -468,7 +501,14 @@ async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: strin
       });
 
       const aiResponse = await response.json();
-      const analysis = JSON.parse(aiResponse.choices[0].message.content);
+      let content = aiResponse.choices[0].message.content;
+      
+      // Remove markdown formatting if present
+      if (content.includes('```json')) {
+        content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+      }
+      
+      const analysis = JSON.parse(content);
 
       // Store insight in database
       await supabaseClient
@@ -496,19 +536,21 @@ async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: strin
 }
 
 async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+  // Get all available project keys if none specified
+  const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
+  
   // Get issues and user participation data
   const { data: issues, error: issuesError } = await supabaseClient
     .from('jira_issues')
     .select('*')
-    .in('project_key', projectKeys)
-    .eq('config_id', configId);
+    .in('project_key', projectKeysToUse);
 
   if (issuesError) throw issuesError;
 
   const { data: participations, error: participationsError } = await supabaseClient
     .from('user_project_participations')
     .select('*')
-    .in('jira_project_key', projectKeys)
+    .in('jira_project_key', projectKeysToUse)
     .eq('is_active', true);
 
   if (participationsError) throw participationsError;
@@ -553,7 +595,7 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
   const prompt = `
   Analyze project cost data:
   
-  Project Keys: ${projectKeys.join(', ')}
+  Project Keys: ${projectKeysToUse.join(', ')}
   Total Issues: ${issues.length}
   Completed Issues: ${issues.filter((i: any) => i.status === 'Done').length}
   Total Estimated Cost: R$ ${totalProjectCost.toFixed(2)}
@@ -564,7 +606,7 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
   ${costData
     .sort((a, b) => b.estimated_cost - a.estimated_cost)
     .slice(0, 5)
-    .map(issue => `- ${issue.jira_key}: R$ ${issue.estimated_cost.toFixed(2)} (${issue.story_points} SP)`)
+    .map(issue => `- ${issue.jira_key}: R$ ${issue.estimated_cost.toFixed(2)} (${issue.story_points || 0} SP)`)
     .join('\n')}
   
   Provide cost analysis with:
@@ -596,7 +638,14 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
     });
 
     const aiResponse = await response.json();
-    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+    let content = aiResponse.choices[0].message.content;
+    
+    // Remove markdown formatting if present
+    if (content.includes('```json')) {
+      content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+    }
+    
+    const analysis = JSON.parse(content);
 
     // Store insight in database
     await supabaseClient
@@ -627,12 +676,14 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
 }
 
 async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+  // Get all available project keys if none specified
+  const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
+  
   // Get team performance and cost data
   const { data: issues, error: issuesError } = await supabaseClient
     .from('jira_issues')
     .select('*')
-    .in('project_key', projectKeys)
-    .eq('config_id', configId)
+    .in('project_key', projectKeysToUse)
     .not('assignee_name', 'is', null);
 
   if (issuesError) throw issuesError;
@@ -640,7 +691,7 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
   const { data: participations, error: participationsError } = await supabaseClient
     .from('user_project_participations')
     .select('*')
-    .in('jira_project_key', projectKeys)
+    .in('jira_project_key', projectKeysToUse)
     .eq('is_active', true);
 
   if (participationsError) throw participationsError;
@@ -723,7 +774,14 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
     });
 
     const aiResponse = await response.json();
-    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+    let content = aiResponse.choices[0].message.content;
+    
+    // Remove markdown formatting if present
+    if (content.includes('```json')) {
+      content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+    }
+    
+    const analysis = JSON.parse(content);
 
     // Store insight in database
     await supabaseClient
@@ -750,19 +808,21 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
 }
 
 async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+  // Get all available project keys if none specified
+  const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
+  
   // Get current spend and projections
   const { data: issues, error: issuesError } = await supabaseClient
     .from('jira_issues')
     .select('*')
-    .in('project_key', projectKeys)
-    .eq('config_id', configId);
+    .in('project_key', projectKeysToUse);
 
   if (issuesError) throw issuesError;
 
   const { data: participations, error: participationsError } = await supabaseClient
     .from('user_project_participations')
     .select('*')
-    .in('jira_project_key', projectKeys)
+    .in('jira_project_key', projectKeysToUse)
     .eq('is_active', true);
 
   if (participationsError) throw participationsError;
@@ -799,7 +859,7 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
   const prompt = `
   Analyze budget status and generate alerts:
   
-  Project Keys: ${projectKeys.join(', ')}
+  Project Keys: ${projectKeysToUse.join(', ')}
   Total Projected Cost: R$ ${projectedTotalCost.toFixed(2)}
   Current Spend: R$ ${totalBudgetSpent.toFixed(2)}
   Budget Used: ${(spendRate * 100).toFixed(1)}%
@@ -838,7 +898,14 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
     });
 
     const aiResponse = await response.json();
-    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+    let content = aiResponse.choices[0].message.content;
+    
+    // Remove markdown formatting if present
+    if (content.includes('```json')) {
+      content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+    }
+    
+    const analysis = JSON.parse(content);
 
     // Store insight in database
     await supabaseClient
