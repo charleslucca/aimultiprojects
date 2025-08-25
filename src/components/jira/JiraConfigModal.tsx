@@ -246,7 +246,7 @@ const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
                 </p>
               </div>
               {testResult && (
-                <Badge variant={testResult.success ? "success" : "destructive"}>
+                <Badge variant={testResult.success ? "default" : "destructive"}>
                   {testResult.success ? (
                     <CheckCircle className="h-3 w-3 mr-1" />
                   ) : (

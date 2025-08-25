@@ -22,7 +22,8 @@ import {
   Plus,
   Bell,
   LogOut,
-  BookOpen
+  BookOpen,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,11 @@ const navigationItems = [
     title: 'Projetos',
     url: '/projects',
     icon: FolderOpen,
+  },
+  {
+    title: 'Cockpit Jira + IA',
+    url: '/jira-cockpit',
+    icon: BarChart3,
   },
   {
     title: 'Cockpit',

@@ -13,6 +13,7 @@ import Projects from "./pages/Projects";
 import Dashboard from "./pages/Dashboard";
 import Team from "./pages/Team";
 import Academy from "./pages/Academy";
+import JiraCockpit from "./pages/JiraCockpit";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
