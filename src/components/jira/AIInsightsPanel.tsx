@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   AlertTriangle, 
   TrendingUp, 
@@ -12,7 +14,9 @@ import {
   Brain,
   CheckCircle,
   AlertCircle,
-  Info
+  Info,
+  DollarSign,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,9 +24,12 @@ interface AIInsightsPanelProps {
   insights: any[];
   issues: any[];
   projects: any[];
+  selectedConfig?: any;
 }
 
-const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, projects }) => {
+const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, projects, selectedConfig }) => {
+  const { toast } = useToast();
+  const [isGenerating, setIsGenerating] = useState<string | null>(null);
   // Group insights by type
   const slaRiskInsights = insights.filter(i => i.insight_type === 'sla_risk');
   const sprintPredictions = insights.filter(i => i.insight_type === 'sprint_prediction');
@@ -74,8 +81,55 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
         return 'Previsão Sprint';
       case 'sentiment':
         return 'Sentimento';
+      case 'cost_analysis':
+        return 'Análise de Custo';
+      case 'productivity_economics':
+        return 'Economia Produtiva';
+      case 'budget_alerts':
+        return 'Alertas Orçamentários';
       default:
         return type;
+    }
+  };
+
+  const generateInsight = async (action: string, buttonText: string) => {
+    if (!selectedConfig) {
+      toast({
+        title: "Erro",
+        description: "Nenhuma configuração Jira selecionada",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsGenerating(action);
+    try {
+      const { data, error } = await supabase.functions.invoke('jira-ai-insights', {
+        body: { 
+          action,
+          project_keys: selectedConfig.project_keys,
+          config_id: selectedConfig.id
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Insight Gerado",
+        description: `${buttonText} concluído com sucesso!`,
+      });
+
+      // Refresh the page to show new insights
+      window.location.reload();
+
+    } catch (error: any) {
+      toast({
+        title: "Erro ao gerar insight",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(null);
     }
   };
 
@@ -276,17 +330,64 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
           <CardTitle className="text-sm">Ações Rápidas</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <Button variant="outline" size="sm" className="w-full justify-start">
-            <TrendingUp className="h-4 w-4 mr-2" />
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start"
+            onClick={() => generateInsight('analyze_team_performance', 'Relatório de Performance')}
+            disabled={isGenerating === 'analyze_team_performance'}
+          >
+            {isGenerating === 'analyze_team_performance' ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <TrendingUp className="h-4 w-4 mr-2" />
+            )}
             Gerar Relatório de Performance
           </Button>
-          <Button variant="outline" size="sm" className="w-full justify-start">
-            <Users className="h-4 w-4 mr-2" />
-            Analisar Carga de Trabalho
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start"
+            onClick={() => generateInsight('productivity_economics', 'Análise de Produtividade')}
+            disabled={isGenerating === 'productivity_economics'}
+          >
+            {isGenerating === 'productivity_economics' ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Users className="h-4 w-4 mr-2" />
+            )}
+            Analisar Produtividade/Custo
           </Button>
-          <Button variant="outline" size="sm" className="w-full justify-start">
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Identificar Riscos
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start"
+            onClick={() => generateInsight('cost_analysis', 'Análise de Custo')}
+            disabled={isGenerating === 'cost_analysis'}
+          >
+            {isGenerating === 'cost_analysis' ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <DollarSign className="h-4 w-4 mr-2" />
+            )}
+            Análise de Custos
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="w-full justify-start"
+            onClick={() => generateInsight('budget_alerts', 'Alertas Orçamentários')}
+            disabled={isGenerating === 'budget_alerts'}
+          >
+            {isGenerating === 'budget_alerts' ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <AlertTriangle className="h-4 w-4 mr-2" />
+            )}
+            Alertas de Orçamento
           </Button>
         </CardContent>
       </Card>

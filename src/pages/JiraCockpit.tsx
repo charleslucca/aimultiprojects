@@ -330,6 +330,7 @@ const JiraCockpit: React.FC = () => {
             insights={insights}
             issues={issues}
             projects={projects}
+            selectedConfig={selectedConfig}
           />
         </div>
       </div>

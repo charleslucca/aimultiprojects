@@ -23,7 +23,7 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured');
     }
 
-    const { action, issue_ids, project_keys } = await req.json();
+    const { action, issue_ids, project_keys, config_id } = await req.json();
 
     if (action === 'generate_sla_risk_insights') {
       const insights = await generateSLARiskInsights(supabaseClient, openAIApiKey, issue_ids);
@@ -56,6 +56,27 @@ serve(async (req) => {
     if (action === 'sentiment_analysis') {
       const sentiment = await performSentimentAnalysis(supabaseClient, openAIApiKey, issue_ids);
       return new Response(JSON.stringify({ sentiment }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'cost_analysis') {
+      const analysis = await performCostAnalysis(supabaseClient, openAIApiKey, project_keys, config_id);
+      return new Response(JSON.stringify({ analysis }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'productivity_economics') {
+      const economics = await analyzeProductivityEconomics(supabaseClient, openAIApiKey, project_keys, config_id);
+      return new Response(JSON.stringify({ economics }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (action === 'budget_alerts') {
+      const alerts = await generateBudgetAlerts(supabaseClient, openAIApiKey, project_keys, config_id);
+      return new Response(JSON.stringify({ alerts }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -472,4 +493,379 @@ async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: strin
   }
 
   return analyses;
+}
+
+async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+  // Get issues and user participation data
+  const { data: issues, error: issuesError } = await supabaseClient
+    .from('jira_issues')
+    .select('*')
+    .in('project_key', projectKeys)
+    .eq('config_id', configId);
+
+  if (issuesError) throw issuesError;
+
+  const { data: participations, error: participationsError } = await supabaseClient
+    .from('user_project_participations')
+    .select('*')
+    .in('jira_project_key', projectKeys)
+    .eq('is_active', true);
+
+  if (participationsError) throw participationsError;
+
+  // Calculate costs
+  const costData = issues.map((issue: any) => {
+    const assigneeParticipation = participations.find((p: any) => 
+      p.jira_project_key === issue.project_key && 
+      // For now, match by project. In future, could match by assignee name
+      p.jira_project_key === issue.project_key
+    );
+
+    let estimatedCost = 0;
+    if (assigneeParticipation && issue.story_points) {
+      // Estimate 8 hours per story point by default
+      const estimatedHours = issue.story_points * 8;
+      
+      if (assigneeParticipation.hourly_rate) {
+        estimatedCost = estimatedHours * assigneeParticipation.hourly_rate;
+      } else if (assigneeParticipation.monthly_salary) {
+        // Assume 160 working hours per month
+        const hourlyRate = assigneeParticipation.monthly_salary / 160;
+        estimatedCost = estimatedHours * hourlyRate;
+      }
+      
+      // Adjust by allocation percentage
+      estimatedCost = estimatedCost * (assigneeParticipation.allocation_percentage / 100);
+    }
+
+    return {
+      ...issue,
+      estimated_cost: estimatedCost,
+      participation: assigneeParticipation
+    };
+  });
+
+  const totalProjectCost = costData.reduce((sum, issue) => sum + issue.estimated_cost, 0);
+  const completedIssueCost = costData
+    .filter(issue => issue.status === 'Done')
+    .reduce((sum, issue) => sum + issue.estimated_cost, 0);
+
+  const prompt = `
+  Analyze project cost data:
+  
+  Project Keys: ${projectKeys.join(', ')}
+  Total Issues: ${issues.length}
+  Completed Issues: ${issues.filter((i: any) => i.status === 'Done').length}
+  Total Estimated Cost: R$ ${totalProjectCost.toFixed(2)}
+  Completed Work Cost: R$ ${completedIssueCost.toFixed(2)}
+  Cost Completion Rate: ${totalProjectCost > 0 ? ((completedIssueCost / totalProjectCost) * 100).toFixed(1) : 0}%
+  
+  Top 5 most expensive issues:
+  ${costData
+    .sort((a, b) => b.estimated_cost - a.estimated_cost)
+    .slice(0, 5)
+    .map(issue => `- ${issue.jira_key}: R$ ${issue.estimated_cost.toFixed(2)} (${issue.story_points} SP)`)
+    .join('\n')}
+  
+  Provide cost analysis with:
+  1. Cost efficiency assessment
+  2. Budget recommendations
+  3. Most cost-effective completed issues
+  4. Areas for cost optimization
+  5. ROI insights
+  
+  Respond in JSON format with keys: cost_efficiency_score, budget_recommendations, cost_effective_issues, optimization_areas, roi_insights
+  `;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are an expert financial analyst specializing in software project economics. Always respond with valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+      }),
+    });
+
+    const aiResponse = await response.json();
+    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+
+    // Store insight in database
+    await supabaseClient
+      .from('jira_ai_insights')
+      .insert({
+        insight_type: 'cost_analysis',
+        confidence_score: analysis.cost_efficiency_score || 0.8,
+        insight_data: {
+          ...analysis,
+          total_cost: totalProjectCost,
+          completed_cost: completedIssueCost,
+          cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0
+        },
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      });
+
+    return {
+      total_cost: totalProjectCost,
+      completed_cost: completedIssueCost,
+      issues_with_costs: costData,
+      ...analysis
+    };
+
+  } catch (error) {
+    console.error('Failed to perform cost analysis:', error);
+    throw error;
+  }
+}
+
+async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+  // Get team performance and cost data
+  const { data: issues, error: issuesError } = await supabaseClient
+    .from('jira_issues')
+    .select('*')
+    .in('project_key', projectKeys)
+    .eq('config_id', configId)
+    .not('assignee_name', 'is', null);
+
+  if (issuesError) throw issuesError;
+
+  const { data: participations, error: participationsError } = await supabaseClient
+    .from('user_project_participations')
+    .select('*')
+    .in('jira_project_key', projectKeys)
+    .eq('is_active', true);
+
+  if (participationsError) throw participationsError;
+
+  // Calculate productivity metrics per person
+  const productivityData = issues.reduce((data: any, issue: any) => {
+    const assignee = issue.assignee_name;
+    if (!data[assignee]) {
+      data[assignee] = {
+        total_issues: 0,
+        completed_issues: 0,
+        story_points: 0,
+        estimated_cost: 0,
+        participation: null
+      };
+    }
+
+    const participation = participations.find((p: any) => p.jira_project_key === issue.project_key);
+    if (participation) {
+      data[assignee].participation = participation;
+      
+      // Calculate cost for this issue
+      if (issue.story_points && participation.hourly_rate) {
+        const estimatedHours = issue.story_points * 8;
+        const cost = estimatedHours * participation.hourly_rate * (participation.allocation_percentage / 100);
+        data[assignee].estimated_cost += cost;
+      }
+    }
+
+    data[assignee].total_issues++;
+    data[assignee].story_points += issue.story_points || 0;
+    
+    if (issue.status === 'Done') {
+      data[assignee].completed_issues++;
+    }
+
+    return data;
+  }, {});
+
+  const prompt = `
+  Analyze team productivity economics:
+  
+  ${Object.entries(productivityData).map(([name, data]: [string, any]) => `
+  Team Member: ${name}
+  - Total Issues: ${data.total_issues}
+  - Completed Issues: ${data.completed_issues}
+  - Story Points: ${data.story_points}
+  - Estimated Cost: R$ ${data.estimated_cost.toFixed(2)}
+  - Completion Rate: ${((data.completed_issues / data.total_issues) * 100).toFixed(1)}%
+  - Cost per Story Point: R$ ${data.story_points > 0 ? (data.estimated_cost / data.story_points).toFixed(2) : '0.00'}
+  - Productivity Score: ${data.story_points > 0 ? (data.completed_issues / data.estimated_cost * 1000).toFixed(2) : '0.00'}
+  `).join('\n')}
+  
+  Provide productivity economics analysis with:
+  1. Most cost-effective team members
+  2. Productivity improvement recommendations
+  3. Resource allocation suggestions
+  4. Value-for-money insights
+  5. Overall team productivity score (0-1)
+  
+  Respond in JSON format with keys: cost_effective_members, productivity_recommendations, resource_allocation, value_insights, team_productivity_score
+  `;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are an expert in productivity economics and team optimization. Always respond with valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+      }),
+    });
+
+    const aiResponse = await response.json();
+    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+
+    // Store insight in database
+    await supabaseClient
+      .from('jira_ai_insights')
+      .insert({
+        insight_type: 'productivity_economics',
+        confidence_score: analysis.team_productivity_score || 0.8,
+        insight_data: {
+          ...analysis,
+          productivity_data: productivityData
+        },
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      });
+
+    return {
+      productivity_data: productivityData,
+      ...analysis
+    };
+
+  } catch (error) {
+    console.error('Failed to analyze productivity economics:', error);
+    throw error;
+  }
+}
+
+async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+  // Get current spend and projections
+  const { data: issues, error: issuesError } = await supabaseClient
+    .from('jira_issues')
+    .select('*')
+    .in('project_key', projectKeys)
+    .eq('config_id', configId);
+
+  if (issuesError) throw issuesError;
+
+  const { data: participations, error: participationsError } = await supabaseClient
+    .from('user_project_participations')
+    .select('*')
+    .in('jira_project_key', projectKeys)
+    .eq('is_active', true);
+
+  if (participationsError) throw participationsError;
+
+  // Calculate budget data
+  let totalBudgetSpent = 0;
+  let projectedTotalCost = 0;
+  
+  issues.forEach((issue: any) => {
+    const participation = participations.find((p: any) => p.jira_project_key === issue.project_key);
+    if (participation && issue.story_points) {
+      const estimatedHours = issue.story_points * 8;
+      let issueCost = 0;
+      
+      if (participation.hourly_rate) {
+        issueCost = estimatedHours * participation.hourly_rate;
+      } else if (participation.monthly_salary) {
+        const hourlyRate = participation.monthly_salary / 160;
+        issueCost = estimatedHours * hourlyRate;
+      }
+      
+      issueCost = issueCost * (participation.allocation_percentage / 100);
+      projectedTotalCost += issueCost;
+      
+      if (issue.status === 'Done') {
+        totalBudgetSpent += issueCost;
+      }
+    }
+  });
+
+  const completionRate = issues.length > 0 ? (issues.filter((i: any) => i.status === 'Done').length / issues.length) : 0;
+  const spendRate = projectedTotalCost > 0 ? (totalBudgetSpent / projectedTotalCost) : 0;
+
+  const prompt = `
+  Analyze budget status and generate alerts:
+  
+  Project Keys: ${projectKeys.join(', ')}
+  Total Projected Cost: R$ ${projectedTotalCost.toFixed(2)}
+  Current Spend: R$ ${totalBudgetSpent.toFixed(2)}
+  Budget Used: ${(spendRate * 100).toFixed(1)}%
+  Work Completed: ${(completionRate * 100).toFixed(1)}%
+  Burn Rate vs Completion: ${completionRate > 0 ? (spendRate / completionRate).toFixed(2) : 'N/A'}
+  
+  Active Team Members: ${participations.length}
+  Monthly Team Cost: R$ ${participations.reduce((sum: number, p: any) => sum + (p.monthly_salary || 0), 0).toFixed(2)}
+  
+  Generate budget alerts and recommendations:
+  1. Critical budget warnings (if any)
+  2. Spending trend analysis
+  3. Budget optimization suggestions
+  4. Resource reallocation recommendations
+  5. Financial risk assessment (0-1 scale)
+  
+  Respond in JSON format with keys: critical_warnings, spending_trends, optimization_suggestions, reallocation_recommendations, financial_risk_score
+  `;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are an expert financial controller specializing in project budget management. Always respond with valid JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+      }),
+    });
+
+    const aiResponse = await response.json();
+    const analysis = JSON.parse(aiResponse.choices[0].message.content);
+
+    // Store insight in database
+    await supabaseClient
+      .from('jira_ai_insights')
+      .insert({
+        insight_type: 'budget_alerts',
+        confidence_score: analysis.financial_risk_score || 0.5,
+        insight_data: {
+          ...analysis,
+          projected_total_cost: projectedTotalCost,
+          current_spend: totalBudgetSpent,
+          spend_rate: spendRate,
+          completion_rate: completionRate
+        },
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+      });
+
+    return {
+      projected_total_cost: projectedTotalCost,
+      current_spend: totalBudgetSpent,
+      spend_rate: spendRate,
+      completion_rate: completionRate,
+      ...analysis
+    };
+
+  } catch (error) {
+    console.error('Failed to generate budget alerts:', error);
+    throw error;
+  }
 }
