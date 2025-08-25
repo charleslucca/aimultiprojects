@@ -337,26 +337,63 @@ const EconomicDashboard: React.FC<EconomicDashboardProps> = ({ insights, issues,
       )}
 
       {/* ROI Insights */}
-      {insights.find(i => i.insight_type === 'cost_analysis')?.insight_data?.roi_insights && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-blue-500" />
-              Insights de ROI
-            </CardTitle>
-            <CardDescription>
-              Análise de retorno sobre investimento
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                {insights.find(i => i.insight_type === 'cost_analysis')?.insight_data?.roi_insights}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {(() => {
+        const roiInsights = insights.find(i => i.insight_type === 'cost_analysis')?.insight_data?.roi_insights;
+        if (!roiInsights) return null;
+
+        // Handle case where roi_insights is an object
+        if (typeof roiInsights === 'object' && roiInsights !== null) {
+          return (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-blue-500" />
+                  Insights de ROI
+                </CardTitle>
+                <CardDescription>
+                  Análise de retorno sobre investimento
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {roiInsights.current_roi && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm font-medium text-green-800 mb-1">ROI Atual:</p>
+                      <p className="text-sm text-green-700">{roiInsights.current_roi}</p>
+                    </div>
+                  )}
+                  {roiInsights.future_roi_potential && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-sm font-medium text-blue-800 mb-1">Potencial ROI Futuro:</p>
+                      <p className="text-sm text-blue-700">{roiInsights.future_roi_potential}</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        }
+
+        // Handle case where roi_insights is a string
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-500" />
+                Insights de ROI
+              </CardTitle>
+              <CardDescription>
+                Análise de retorno sobre investimento
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">{String(roiInsights)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
     </div>
   );
 };
