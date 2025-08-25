@@ -31,9 +31,19 @@ export const FileUpload = ({
     'application/pdf': ['.pdf'],
     'application/msword': ['.doc'],
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    'application/vnd.ms-excel': ['.xls'],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    'text/csv': ['.csv'],
+    'application/vnd.ms-powerpoint': ['.ppt'],
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
     'text/plain': ['.txt'],
-    'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.svg'],
-    'video/*': ['.mp4', '.avi', '.mov', '.wmv']
+    'text/markdown': ['.md'],
+    'application/rtf': ['.rtf'],
+    'application/zip': ['.zip'],
+    'application/x-rar-compressed': ['.rar'],
+    'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.bmp'],
+    'video/*': ['.mp4', '.avi', '.mov', '.wmv', '.webm', '.mkv'],
+    'audio/*': ['.mp3', '.wav', '.aac', '.ogg', '.m4a']
   },
   maxFiles = 10,
   maxSize = 50 * 1024 * 1024 // 50MB
@@ -114,11 +124,20 @@ export const FileUpload = ({
 
       return data;
     } catch (error: any) {
+      console.error('Upload error for file:', file.name, error);
+      const errorMessage = error.message?.includes('storage') 
+        ? 'Erro no armazenamento. Tente novamente.'
+        : error.message?.includes('size') 
+        ? 'Arquivo muito grande. Máximo permitido: 50MB'
+        : error.message?.includes('type')
+        ? 'Tipo de arquivo não suportado'
+        : error.message || 'Erro desconhecido no upload';
+        
       setUploadingFiles(prev => 
         prev.map(f => f.id === uploadFile.id ? { 
           ...f, 
           status: 'error' as const, 
-          error: error.message 
+          error: errorMessage
         } : f)
       );
       throw error;
@@ -194,7 +213,7 @@ export const FileUpload = ({
             {isDragActive ? "Solte os arquivos aqui" : "Arraste arquivos ou clique para enviar"}
           </h3>
           <p className="text-sm text-muted-foreground mb-4">
-            Suporte para PDF, DOC, DOCX, TXT, imagens e vídeos (até {Math.round(maxSize / 1024 / 1024)}MB)
+            Suporte para PDF, Office (DOC, DOCX, XLS, XLSX, PPT, PPTX), CSV, TXT, MD, RTF, ZIP, RAR, imagens, vídeos e áudios (até {Math.round(maxSize / 1024 / 1024)}MB)
           </p>
           <Button type="button" variant="outline">
             Selecionar Arquivos
