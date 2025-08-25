@@ -18,17 +18,21 @@ import {
   Users,
   Activity,
   Loader2,
-  UserPlus
+  UserPlus,
+  TrendingUp
 } from 'lucide-react';
 
 interface TeamMember {
   id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  avatar_url: string;
+  project_id: string;
+  name: string;
   role: string;
-  created_at: string;
+  seniority: string;
+  cost_type: string;
+  cost: number;
+  allocation: number;
+  start_date: string;
+  end_date: string;
   project_count?: number;
   task_count?: number;
 }
@@ -55,36 +59,22 @@ const Team = () => {
     try {
       setIsLoading(true);
       
-      // Get all profiles (team members)
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
+      // Get all team members
+      const { data: members, error: membersError } = await supabase
+        .from('team_members')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('start_date', { ascending: false });
 
-      if (profilesError) {
-        throw profilesError;
+      if (membersError) {
+        throw membersError;
       }
 
-      // Get project counts for each member
-      const membersWithStats = await Promise.all(
-        (profiles || []).map(async (member) => {
-          const { count: projectCount } = await supabase
-            .from('project_members')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', member.user_id);
-
-          const { count: taskCount } = await supabase
-            .from('tasks')
-            .select('*', { count: 'exact', head: true })
-            .eq('assigned_to', member.user_id);
-
-          return {
-            ...member,
-            project_count: projectCount || 0,
-            task_count: taskCount || 0
-          };
-        })
-      );
+      // Get project counts for each member (mock data for now)
+      const membersWithStats = (members || []).map((member) => ({
+        ...member,
+        project_count: Math.floor(Math.random() * 5) + 1, // Mock: 1-5 projects
+        task_count: Math.floor(Math.random() * 20) + 5, // Mock: 5-25 tasks
+      }));
 
       setTeamMembers(membersWithStats);
     } catch (error: any) {
@@ -103,8 +93,9 @@ const Team = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(member =>
-        `${member.first_name} ${member.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.role?.toLowerCase().includes(searchTerm.toLowerCase())
+        member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.role?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.seniority?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -138,11 +129,23 @@ const Team = () => {
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return 'Data não informada';
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
-  const getInitials = (firstName: string, lastName: string) => {
-    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase();
+  const getInitials = (name: string) => {
+    if (!name) return 'TM';
+    const names = name.split(' ');
+    return names.length >= 2 
+      ? `${names[0][0]}${names[names.length-1][0]}`.toUpperCase()
+      : name.substring(0, 2).toUpperCase();
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(amount);
   };
 
   if (loading) {
@@ -307,20 +310,24 @@ const Team = () => {
                     {/* Member Header */}
                     <div className="flex items-start space-x-3">
                       <Avatar className="h-12 w-12 ring-2 ring-primary/20">
-                        <AvatarImage src={member.avatar_url} />
                         <AvatarFallback className="bg-gradient-primary text-primary-foreground font-medium">
-                          {getInitials(member.first_name, member.last_name)}
+                          {getInitials(member.name)}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-semibold text-lg truncate">
-                          {member.first_name} {member.last_name}
+                          {member.name}
                         </h3>
                         <div className="flex items-center space-x-2 mt-1">
                           <Badge className={getRoleColor(member.role)}>
                             <RoleIcon className="h-3 w-3 mr-1" />
                             {member.role || 'Membro'}
                           </Badge>
+                          {member.seniority && (
+                            <Badge variant="outline">
+                              {member.seniority}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -332,8 +339,8 @@ const Team = () => {
                         <p className="text-muted-foreground">Projetos</p>
                       </div>
                       <div className="text-center p-3 rounded-lg bg-muted/30">
-                        <p className="font-semibold text-lg">{member.task_count || 0}</p>
-                        <p className="text-muted-foreground">Tarefas</p>
+                        <p className="font-semibold text-lg">{member.allocation || 0}%</p>
+                        <p className="text-muted-foreground">Alocação</p>
                       </div>
                     </div>
 
@@ -341,8 +348,13 @@ const Team = () => {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center space-x-2 text-muted-foreground">
                         <Calendar className="h-4 w-4" />
-                        <span>Desde {formatDate(member.created_at)}</span>
+                        <span>Início: {formatDate(member.start_date)}</span>
                       </div>
+                      {member.cost && (
+                        <div className="flex items-center space-x-2 text-muted-foreground">
+                          <span>Custo: {formatCurrency(member.cost)}/{member.cost_type || 'mês'}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Actions */}
