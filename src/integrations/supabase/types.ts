@@ -153,36 +153,51 @@ export type Database = {
       project_attachments: {
         Row: {
           ai_insights: Json | null
+          analysis_status: string | null
           category: string | null
+          extracted_content: string | null
+          file_metadata: Json | null
           file_name: string
           file_path: string
+          file_size: number | null
           file_type: string
           id: string
           project_id: string | null
+          storage_path: string | null
           transcription: string | null
           uploaded_at: string | null
           uploaded_by: string | null
         }
         Insert: {
           ai_insights?: Json | null
+          analysis_status?: string | null
           category?: string | null
+          extracted_content?: string | null
+          file_metadata?: Json | null
           file_name: string
           file_path: string
+          file_size?: number | null
           file_type: string
           id?: string
           project_id?: string | null
+          storage_path?: string | null
           transcription?: string | null
           uploaded_at?: string | null
           uploaded_by?: string | null
         }
         Update: {
           ai_insights?: Json | null
+          analysis_status?: string | null
           category?: string | null
+          extracted_content?: string | null
+          file_metadata?: Json | null
           file_name?: string
           file_path?: string
+          file_size?: number | null
           file_type?: string
           id?: string
           project_id?: string | null
+          storage_path?: string | null
           transcription?: string | null
           uploaded_at?: string | null
           uploaded_by?: string | null
@@ -234,6 +249,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_intelligence_profiles: {
+        Row: {
+          average_hourly_rate: number | null
+          business_context: string | null
+          created_at: string
+          custom_prompts: Json | null
+          id: string
+          methodology: string | null
+          project_id: string | null
+          story_points_to_hours: number | null
+          success_metrics: Json | null
+          updated_at: string
+        }
+        Insert: {
+          average_hourly_rate?: number | null
+          business_context?: string | null
+          created_at?: string
+          custom_prompts?: Json | null
+          id?: string
+          methodology?: string | null
+          project_id?: string | null
+          story_points_to_hours?: number | null
+          success_metrics?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          average_hourly_rate?: number | null
+          business_context?: string | null
+          created_at?: string
+          custom_prompts?: Json | null
+          id?: string
+          methodology?: string | null
+          project_id?: string | null
+          story_points_to_hours?: number | null
+          success_metrics?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_intelligence_profiles_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
