@@ -9,6 +9,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Projects from "./pages/Projects";
+import Team from "./pages/Team";
+import Academy from "./pages/Academy";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 // Create QueryClient instance with proper configuration
@@ -35,12 +39,16 @@ const App: React.FC = () => {
             <Sonner />
             <BrowserRouter>
               <AppLayout>
-                <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/auth" element={<Auth />} />
-                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/projects" element={<Projects />} />
+              <Route path="/team" element={<Team />} />
+              <Route path="/academy" element={<Academy />} />
+              <Route path="/settings" element={<Settings />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
               </AppLayout>
             </BrowserRouter>
           </TooltipProvider>
