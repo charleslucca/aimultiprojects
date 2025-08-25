@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { InviteMemberModal } from '@/components/modals/InviteMemberModal';
 import { 
   Plus, 
   Search, 
@@ -44,6 +45,7 @@ const Team = () => {
   const [filteredMembers, setFilteredMembers] = useState<TeamMember[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -170,7 +172,10 @@ const Team = () => {
             Gerencie os membros da sua organização
           </p>
         </div>
-        <Button className="bg-gradient-primary hover:opacity-90 shadow-alpine">
+        <Button 
+          className="bg-gradient-primary hover:opacity-90 shadow-alpine"
+          onClick={() => setShowInviteModal(true)}
+        >
           <UserPlus className="h-4 w-4 mr-2" />
           Convidar Membro
         </Button>
@@ -372,10 +377,17 @@ const Team = () => {
               </Card>
             );
           })}
-        </div>
-      )}
-    </div>
-  );
-};
+         </div>
+       )}
+
+       {/* Invite Member Modal */}
+       <InviteMemberModal
+         open={showInviteModal}
+         onOpenChange={setShowInviteModal}
+         onMemberInvited={fetchTeamMembers}
+       />
+     </div>
+   );
+ };
 
 export default Team;

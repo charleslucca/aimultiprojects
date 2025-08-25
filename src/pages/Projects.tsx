@@ -7,7 +7,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { 
+import { NewProjectModal } from '@/components/modals/NewProjectModal';
+import { ProjectDetailsModal } from '@/components/modals/ProjectDetailsModal';
+import {
   Plus, 
   Search, 
   Filter,
@@ -41,6 +43,8 @@ const Projects = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -191,7 +195,10 @@ const Projects = () => {
             Gerencie e acompanhe todos os seus projetos
           </p>
         </div>
-        <Button className="bg-gradient-primary hover:opacity-90 shadow-alpine">
+        <Button 
+          className="bg-gradient-primary hover:opacity-90 shadow-alpine"
+          onClick={() => setShowNewProjectModal(true)}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Novo Projeto
         </Button>
@@ -337,7 +344,11 @@ const Projects = () => {
                   </div>
 
                   {/* Action Button */}
-                  <Button variant="outline" className="w-full hover:bg-accent">
+                  <Button 
+                    variant="outline" 
+                    className="w-full hover:bg-accent"
+                    onClick={() => setSelectedProjectId(project.id)}
+                  >
                     Ver Detalhes
                   </Button>
                 </div>
@@ -345,6 +356,20 @@ const Projects = () => {
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Modals */}
+      <NewProjectModal
+        open={showNewProjectModal}
+        onOpenChange={setShowNewProjectModal}
+        onProjectCreated={fetchProjects}
+      />
+      {selectedProjectId && (
+        <ProjectDetailsModal
+          open={!!selectedProjectId}
+          onOpenChange={(open) => !open && setSelectedProjectId(null)}
+          projectId={selectedProjectId}
+        />
       )}
     </div>
   );
