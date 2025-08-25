@@ -46,8 +46,9 @@ const App: React.FC = () => {
               <Route path="/projects" element={<Projects />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/team" element={<Team />} />
-              <Route path="/academy" element={<Academy />} />
-              <Route path="/settings" element={<Settings />} />
+        <Route path="/academy" element={<Academy />} />
+        <Route path="/jira-cockpit" element={<JiraCockpit />} />
+        <Route path="/settings" element={<Settings />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

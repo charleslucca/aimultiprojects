@@ -129,6 +129,399 @@ export type Database = {
           },
         ]
       }
+      jira_ai_insights: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          expires_at: string | null
+          generated_at: string | null
+          id: string
+          insight_data: Json
+          insight_type: string
+          issue_id: string | null
+          project_id: string | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          expires_at?: string | null
+          generated_at?: string | null
+          id?: string
+          insight_data: Json
+          insight_type: string
+          issue_id?: string | null
+          project_id?: string | null
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          expires_at?: string | null
+          generated_at?: string | null
+          id?: string
+          insight_data?: Json
+          insight_type?: string
+          issue_id?: string | null
+          project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_ai_insights_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "jira_issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jira_ai_insights_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "jira_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jira_configurations: {
+        Row: {
+          api_token_encrypted: string | null
+          created_at: string
+          id: string
+          jira_url: string
+          last_sync_at: string | null
+          organization_id: string | null
+          project_keys: string[] | null
+          sync_enabled: boolean | null
+          updated_at: string
+          username: string | null
+        }
+        Insert: {
+          api_token_encrypted?: string | null
+          created_at?: string
+          id?: string
+          jira_url: string
+          last_sync_at?: string | null
+          organization_id?: string | null
+          project_keys?: string[] | null
+          sync_enabled?: boolean | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          api_token_encrypted?: string | null
+          created_at?: string
+          id?: string
+          jira_url?: string
+          last_sync_at?: string | null
+          organization_id?: string | null
+          project_keys?: string[] | null
+          sync_enabled?: boolean | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_configurations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jira_dashboard_widgets: {
+        Row: {
+          created_at: string
+          height: number | null
+          id: string
+          is_active: boolean | null
+          organization_id: string | null
+          position_x: number | null
+          position_y: number | null
+          updated_at: string
+          user_id: string
+          widget_config: Json
+          widget_type: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          position_x?: number | null
+          position_y?: number | null
+          updated_at?: string
+          user_id: string
+          widget_config: Json
+          widget_type: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          height?: number | null
+          id?: string
+          is_active?: boolean | null
+          organization_id?: string | null
+          position_x?: number | null
+          position_y?: number | null
+          updated_at?: string
+          user_id?: string
+          widget_config?: Json
+          widget_type?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_dashboard_widgets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jira_issues: {
+        Row: {
+          assignee_name: string | null
+          components: string[] | null
+          config_id: string | null
+          created_at: string
+          created_date: string | null
+          description: string | null
+          fix_versions: string[] | null
+          id: string
+          issue_type: string | null
+          jira_id: string
+          jira_key: string
+          labels: string[] | null
+          original_estimate: number | null
+          priority: string | null
+          project_key: string | null
+          raw_data: Json | null
+          remaining_estimate: number | null
+          reporter_name: string | null
+          resolved_date: string | null
+          status: string | null
+          story_points: number | null
+          summary: string
+          synced_at: string | null
+          time_spent: number | null
+          updated_date: string | null
+        }
+        Insert: {
+          assignee_name?: string | null
+          components?: string[] | null
+          config_id?: string | null
+          created_at?: string
+          created_date?: string | null
+          description?: string | null
+          fix_versions?: string[] | null
+          id?: string
+          issue_type?: string | null
+          jira_id: string
+          jira_key: string
+          labels?: string[] | null
+          original_estimate?: number | null
+          priority?: string | null
+          project_key?: string | null
+          raw_data?: Json | null
+          remaining_estimate?: number | null
+          reporter_name?: string | null
+          resolved_date?: string | null
+          status?: string | null
+          story_points?: number | null
+          summary: string
+          synced_at?: string | null
+          time_spent?: number | null
+          updated_date?: string | null
+        }
+        Update: {
+          assignee_name?: string | null
+          components?: string[] | null
+          config_id?: string | null
+          created_at?: string
+          created_date?: string | null
+          description?: string | null
+          fix_versions?: string[] | null
+          id?: string
+          issue_type?: string | null
+          jira_id?: string
+          jira_key?: string
+          labels?: string[] | null
+          original_estimate?: number | null
+          priority?: string | null
+          project_key?: string | null
+          raw_data?: Json | null
+          remaining_estimate?: number | null
+          reporter_name?: string | null
+          resolved_date?: string | null
+          status?: string | null
+          story_points?: number | null
+          summary?: string
+          synced_at?: string | null
+          time_spent?: number | null
+          updated_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_issues_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "jira_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jira_projects: {
+        Row: {
+          config_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          jira_id: string
+          jira_key: string
+          lead_name: string | null
+          name: string
+          project_type: string | null
+          raw_data: Json | null
+          synced_at: string | null
+        }
+        Insert: {
+          config_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          jira_id: string
+          jira_key: string
+          lead_name?: string | null
+          name: string
+          project_type?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+        }
+        Update: {
+          config_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          jira_id?: string
+          jira_key?: string
+          lead_name?: string | null
+          name?: string
+          project_type?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_projects_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "jira_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jira_sprints: {
+        Row: {
+          board_id: string | null
+          complete_date: string | null
+          config_id: string | null
+          created_at: string
+          end_date: string | null
+          goal: string | null
+          id: string
+          jira_id: string
+          name: string
+          project_key: string | null
+          raw_data: Json | null
+          start_date: string | null
+          state: string | null
+          synced_at: string | null
+        }
+        Insert: {
+          board_id?: string | null
+          complete_date?: string | null
+          config_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          goal?: string | null
+          id?: string
+          jira_id: string
+          name: string
+          project_key?: string | null
+          raw_data?: Json | null
+          start_date?: string | null
+          state?: string | null
+          synced_at?: string | null
+        }
+        Update: {
+          board_id?: string | null
+          complete_date?: string | null
+          config_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          goal?: string | null
+          id?: string
+          jira_id?: string
+          name?: string
+          project_key?: string | null
+          raw_data?: Json | null
+          start_date?: string | null
+          state?: string | null
+          synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_sprints_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "jira_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jira_webhook_logs: {
+        Row: {
+          config_id: string | null
+          created_at: string
+          id: string
+          issue_key: string | null
+          payload: Json
+          processed: boolean | null
+          processed_at: string | null
+          webhook_event: string
+        }
+        Insert: {
+          config_id?: string | null
+          created_at?: string
+          id?: string
+          issue_key?: string | null
+          payload: Json
+          processed?: boolean | null
+          processed_at?: string | null
+          webhook_event: string
+        }
+        Update: {
+          config_id?: string | null
+          created_at?: string
+          id?: string
+          issue_key?: string | null
+          payload?: Json
+          processed?: boolean | null
+          processed_at?: string | null
+          webhook_event?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jira_webhook_logs_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "jira_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string | null
