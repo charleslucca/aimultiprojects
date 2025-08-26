@@ -147,21 +147,24 @@ export function ProjectCard({ project, showClient = false, onConnectJira }: Proj
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-2">
-          <Button variant="outline" size="sm" className="flex-1">
-            <Settings className="mr-2 h-4 w-4" />
-            Configurar
-          </Button>
-          
           {project.jira_connected ? (
             <Button 
+              variant="outline" 
               size="sm" 
               className="flex-1"
               onClick={handleJiraCockpit}
             >
               <BarChart3 className="mr-2 h-4 w-4" />
-              Cockpit Jira
+              Ver Insights
             </Button>
           ) : (
+            <Button variant="outline" size="sm" className="flex-1">
+              <Settings className="mr-2 h-4 w-4" />
+              Configurar
+            </Button>
+          )}
+          
+          {!project.jira_connected && (
             <Button 
               variant="secondary" 
               size="sm" 
