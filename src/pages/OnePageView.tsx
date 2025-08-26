@@ -13,7 +13,8 @@ import {
   DollarSign,
   Calendar,
   Users,
-  Activity
+  Activity,
+  BarChart3
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -27,6 +28,7 @@ interface Client {
   total_budget?: number;
   active_issues?: number;
   completion_rate?: number;
+  has_jira_connection?: boolean;
 }
 
 export default function OnePageView() {
@@ -65,11 +67,26 @@ export default function OnePageView() {
             .select('id, budget, status')
             .eq('client_id', client.id);
 
-          // Get Jira issues count for projects of this client
-          const { count: issuesCount } = await supabase
-            .from('jira_issues')
-            .select('*', { count: 'exact', head: true })
-            .in('project_key', projects?.map(p => p.id) || []);
+      // Load Jira issues count for projects of this client
+      const projectIds = projects?.map(p => p.id) || [];
+      
+      // Check if any projects have Jira connections
+      const { data: jiraConfigs } = await supabase
+        .from('jira_configurations')
+        .select('id, project_keys')
+        .eq('client_id', client.id);
+
+      let issuesCount = 0;
+      let hasJiraConnection = false;
+
+      if (jiraConfigs && jiraConfigs.length > 0) {
+        hasJiraConnection = true;
+        const { count } = await supabase
+          .from('jira_issues')
+          .select('*', { count: 'exact', head: true })
+          .in('config_id', jiraConfigs.map(c => c.id));
+        issuesCount = count || 0;
+      }
 
           const totalBudget = projects?.reduce((sum, p) => sum + (p.budget || 0), 0) || 0;
           const activeProjects = projects?.filter(p => p.status === 'active').length || 0;
@@ -79,8 +96,9 @@ export default function OnePageView() {
             ...client,
             project_count: projects?.length || 0,
             total_budget: totalBudget,
-            active_issues: issuesCount || 0,
+            active_issues: issuesCount,
             completion_rate: completionRate,
+            has_jira_connection: hasJiraConnection,
           };
         })
       );
@@ -240,6 +258,12 @@ export default function OnePageView() {
                   <Badge variant="outline">
                     {client.project_count} projeto{client.project_count !== 1 ? 's' : ''}
                   </Badge>
+                  {client.has_jira_connection && (
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                      <BarChart3 className="h-3 w-3 mr-1" />
+                      Jira
+                    </Badge>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">

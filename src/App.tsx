@@ -14,6 +14,7 @@ import Dashboard from "./pages/Dashboard";
 import Team from "./pages/Team";
 import Academy from "./pages/Academy";
 import JiraCockpit from "./pages/JiraCockpit";
+import JiraCockpitProject from "./pages/JiraCockpitProject";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -45,7 +46,7 @@ const App: React.FC = () => {
               <Route path="/" element={<OnePageView />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/:projectId/jira" element={<JiraCockpit />} />
+              <Route path="/projects/:projectId/jira" element={<JiraCockpitProject />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/team" element={<Team />} />
               <Route path="/academy" element={<Academy />} />

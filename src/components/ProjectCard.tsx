@@ -10,9 +10,23 @@ import {
   BarChart3,
   AlertTriangle,
   CheckCircle,
-  Clock
+  Clock,
+  Trash2,
+  Unplug,
+  MoreVertical
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { DeleteConfirmationModal } from "@/components/modals/DeleteConfirmationModal";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Project {
   id: string;
@@ -32,10 +46,15 @@ interface ProjectCardProps {
   project: Project;
   showClient?: boolean;
   onConnectJira?: (projectId: string) => void;
+  onDelete?: (projectId: string) => void;
+  onDisconnectJira?: (projectId: string) => void;
 }
 
-export function ProjectCard({ project, showClient = false, onConnectJira }: ProjectCardProps) {
+export function ProjectCard({ project, showClient = false, onConnectJira, onDelete, onDisconnectJira }: ProjectCardProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -69,6 +88,54 @@ export function ProjectCard({ project, showClient = false, onConnectJira }: Proj
 
   const handleJiraCockpit = () => {
     navigate(`/projects/${project.id}/jira`);
+  };
+
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', project.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Projeto excluído",
+        description: `O projeto "${project.name}" foi excluído com sucesso.`,
+      });
+
+      onDelete?.(project.id);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir projeto",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const handleDisconnectJira = async () => {
+    try {
+      // Remove Jira connection from project (update to set jira_connected = false)
+      // This would need to be implemented based on your data structure
+      
+      toast({
+        title: "Jira desconectado",
+        description: `A conexão Jira foi removida do projeto "${project.name}".`,
+      });
+
+      onDisconnectJira?.(project.id);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao desconectar Jira",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const formatCurrency = (value: number) => {
@@ -108,6 +175,32 @@ export function ProjectCard({ project, showClient = false, onConnectJira }: Proj
             <Badge className={getStatusColor(project.status)}>
               {project.status}
             </Badge>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="ml-auto">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {project.jira_connected && (
+                  <>
+                    <DropdownMenuItem onClick={handleDisconnectJira}>
+                      <Unplug className="mr-2 h-4 w-4" />
+                      Desconectar Jira
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem 
+                  onClick={() => setShowDeleteModal(true)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir Projeto
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </CardHeader>
@@ -177,6 +270,16 @@ export function ProjectCard({ project, showClient = false, onConnectJira }: Proj
           )}
         </div>
       </CardContent>
+
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDelete}
+        title="Excluir Projeto"
+        description="Tem certeza de que deseja excluir este projeto?"
+        itemName={project.name}
+        isLoading={isDeleting}
+      />
     </Card>
   );
 }

@@ -243,6 +243,14 @@ export default function Projects() {
               key={project.id}
               project={project}
               onConnectJira={handleConnectJira}
+              onDelete={(projectId) => {
+                setProjects(prev => prev.filter(p => p.id !== projectId));
+              }}
+              onDisconnectJira={(projectId) => {
+                setProjects(prev => prev.map(p => 
+                  p.id === projectId ? { ...p, jira_connected: false } : p
+                ));
+              }}
             />
           ))}
         </div>
@@ -371,6 +379,14 @@ export default function Projects() {
                           key={project.id}
                           project={project}
                           onConnectJira={handleConnectJira}
+                          onDelete={(projectId) => {
+                            setProjects(prev => prev.filter(p => p.id !== projectId));
+                          }}
+                          onDisconnectJira={(projectId) => {
+                            setProjects(prev => prev.map(p => 
+                              p.id === projectId ? { ...p, jira_connected: false } : p
+                            ));
+                          }}
                         />
                       ))}
                     </div>
