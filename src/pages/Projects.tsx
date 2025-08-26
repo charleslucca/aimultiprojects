@@ -1,378 +1,401 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { Navigate, Link } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import { NewProjectModal } from '@/components/modals/NewProjectModal';
-import { ProjectDetailsModal } from '@/components/modals/ProjectDetailsModal';
-import {
-  Plus, 
-  Search, 
-  Filter,
-  Calendar,
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useSearchParams } from "react-router-dom";
+import { 
+  Plus,
+  Search,
+  Building2,
+  FolderOpen,
+  BarChart3,
   Users,
-  TrendingUp,
-  AlertTriangle,
-  Clock,
-  Target,
-  Loader2
-} from 'lucide-react';
+  ChevronDown,
+  ChevronRight
+} from "lucide-react";
+import { ProjectCard } from "@/components/ProjectCard";
+import { NewProjectModal } from "@/components/modals/NewProjectModal";
+import JiraConfigModal from "@/components/jira/JiraConfigModal";
+
+interface Client {
+  id: string;
+  name: string;
+  status_color: string | null;
+  project_count?: number;
+}
 
 interface Project {
   id: string;
-  client_id: string;
   name: string;
-  description: string;
+  description?: string;
   status: string;
-  budget: number;
-  start_date: string;
-  end_date: string;
-  metadata: any;
-  created_at: string;
+  budget?: number;
+  start_date?: string;
+  end_date?: string;
+  client_id?: string;
+  client?: {
+    name: string;
+  };
+  jira_connected?: boolean;
 }
 
-const Projects = () => {
-  const { user, loading } = useAuth();
-  const { toast } = useToast();
+export default function Projects() {
+  const [clients, setClients] = useState<Client[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
+  const [jiraModalOpen, setJiraModalOpen] = useState(false);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  
+  const [searchParams] = useSearchParams();
+  const selectedClientId = searchParams.get('client');
+
+  const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
-      fetchProjects();
-    }
-  }, [user]);
+    loadData();
+  }, []);
 
   useEffect(() => {
     filterProjects();
-  }, [projects, searchTerm, statusFilter]);
+  }, [projects, searchTerm, selectedClientId]);
 
-  const fetchProjects = async () => {
+  useEffect(() => {
+    // Auto-expand client if coming from One Page View
+    if (selectedClientId) {
+      setExpandedClients(new Set([selectedClientId]));
+    }
+  }, [selectedClientId]);
+
+  const loadData = async () => {
     try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('projects')
+      setLoading(true);
+
+      // Load clients
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('clients')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('name');
 
-      if (error) {
-        throw error;
-      }
+      if (clientsError) throw clientsError;
 
-      setProjects(data || []);
+      // Count projects per client
+      const clientsWithCounts = await Promise.all(
+        (clientsData || []).map(async (client) => {
+          const { count } = await supabase
+            .from('projects')
+            .select('*', { count: 'exact', head: true })
+            .eq('client_id', client.id);
+
+          return {
+            ...client,
+            project_count: count || 0,
+          };
+        })
+      );
+
+      setClients(clientsWithCounts);
+
+      // Load projects with client info
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          client:clients(name)
+        `)
+        .order('name');
+
+      if (projectsError) throw projectsError;
+
+      // Check which projects have Jira connections
+      const { data: jiraConfigs } = await supabase
+        .from('jira_configurations')
+        .select('client_id');
+
+      const projectsWithJira = (projectsData || []).map(project => ({
+        ...project,
+        jira_connected: jiraConfigs?.some(config => config.client_id === project.client_id) || false
+      }));
+
+      setProjects(projectsWithJira);
+
     } catch (error: any) {
       toast({
-        title: "Erro ao carregar projetos",
+        title: "Erro ao carregar dados",
         description: error.message,
         variant: "destructive",
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const filterProjects = () => {
     let filtered = projects;
 
+    if (selectedClientId) {
+      filtered = filtered.filter(project => project.client_id === selectedClientId);
+    }
+
     if (searchTerm) {
       filtered = filtered.filter(project =>
         project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.description?.toLowerCase().includes(searchTerm.toLowerCase())
+        project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.client?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(project => project.status === statusFilter);
     }
 
     setFilteredProjects(filtered);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'active':
-      case 'ativo':
-        return 'bg-success text-success-foreground';
-      case 'planning':
-      case 'planejamento':
-        return 'bg-warning text-warning-foreground';
-      case 'completed':
-      case 'concluído':
-        return 'bg-accent text-accent-foreground';
-      case 'paused':
-      case 'pausado':
-        return 'bg-muted text-muted-foreground';
-      case 'cancelled':
-      case 'cancelado':
-        return 'bg-destructive text-destructive-foreground';
-      default:
-        return 'bg-muted text-muted-foreground';
+  const toggleClientExpansion = (clientId: string) => {
+    const newExpanded = new Set(expandedClients);
+    if (newExpanded.has(clientId)) {
+      newExpanded.delete(clientId);
+    } else {
+      newExpanded.add(clientId);
     }
+    setExpandedClients(newExpanded);
   };
 
-  // Mock function for priority since it's not in the current schema
-  const getPriorityColor = (priority: string = 'medium') => {
-    switch (priority) {
-      case 'high':
-        return 'bg-destructive text-destructive-foreground';
-      case 'medium':
-        return 'bg-warning text-warning-foreground';
-      case 'low':
-        return 'bg-success text-success-foreground';
-      case 'critical':
-        return 'bg-destructive text-destructive-foreground animate-pulse';
-      default:
-        return 'bg-muted text-muted-foreground';
-    }
+  const handleConnectJira = (projectId: string) => {
+    setSelectedProject(projectId);
+    setJiraModalOpen(true);
   };
 
-  // Mock function for progress since it's not in the current schema
-  const getProgressPercentage = (project: Project) => {
-    // Generate a mock progress based on project status
-    switch (project.status?.toLowerCase()) {
-      case 'completed':
-      case 'concluído':
-        return 100;
-      case 'active':
-      case 'ativo':
-        return Math.floor(Math.random() * 60) + 30; // 30-90%
-      case 'planning':
-      case 'planejamento':
-        return Math.floor(Math.random() * 30); // 0-30%
-      default:
-        return 0;
-    }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('pt-BR');
+  const getClientProjects = (clientId: string) => {
+    return filteredProjects.filter(project => project.client_id === clientId);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando projetos...</p>
+        </div>
       </div>
     );
   }
 
-  if (!user) {
-    return <Navigate to="/auth" replace />;
+  // If showing specific client, show projects directly
+  if (selectedClientId) {
+    const client = clients.find(c => c.id === selectedClientId);
+    const clientProjects = getClientProjects(selectedClientId);
+
+    return (
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Projetos - {client?.name}
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Gerencie os projetos do cliente {client?.name}
+            </p>
+          </div>
+          <Button onClick={() => setNewProjectModalOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Projeto
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+          {clientProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              onConnectJira={handleConnectJira}
+            />
+          ))}
+        </div>
+
+        {clientProjects.length === 0 && (
+          <Card className="p-8">
+            <div className="text-center">
+              <FolderOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Nenhum projeto encontrado</h3>
+              <p className="text-muted-foreground mb-4">
+                Este cliente ainda não possui projetos cadastrados.
+              </p>
+              <Button onClick={() => setNewProjectModalOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Criar Primeiro Projeto
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        <NewProjectModal 
+          open={newProjectModalOpen}
+          onOpenChange={setNewProjectModalOpen}
+          onProjectCreated={loadData}
+        />
+
+        <JiraConfigModal
+          isOpen={jiraModalOpen}
+          onClose={() => {
+            setJiraModalOpen(false);
+            setSelectedProject(null);
+          }}
+          onSave={loadData}
+        />
+      </div>
+    );
   }
 
-  const statusOptions = [
-    { value: 'all', label: 'Todos' },
-    { value: 'planning', label: 'Planejamento' },
-    { value: 'active', label: 'Ativo' },
-    { value: 'paused', label: 'Pausado' },
-    { value: 'completed', label: 'Concluído' },
-    { value: 'cancelled', label: 'Cancelado' },
-  ];
-
+  // Default hierarchical view by client
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto px-4 py-8 space-y-8">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Projetos</h1>
-          <p className="text-muted-foreground">
-            Gerencie e acompanhe todos os seus projetos
+          <h1 className="text-3xl font-bold tracking-tight">Projetos</h1>
+          <p className="text-muted-foreground mt-2">
+            Gerencie todos os seus projetos organizados por cliente
           </p>
         </div>
-        <Button 
-          className="bg-gradient-primary hover:opacity-90 shadow-alpine"
-          onClick={() => setShowNewProjectModal(true)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
+        <Button onClick={() => setNewProjectModalOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
           Novo Projeto
         </Button>
       </div>
 
-      {/* Filters */}
-      <Card className="glass-card">
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar projetos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-border rounded-md bg-background text-foreground"
-              >
-                {statusOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <Button variant="outline" size="icon">
-                <Filter className="h-4 w-4" />
-              </Button>
-            </div>
+      {/* Search */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar projetos ou clientes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* Projects Grid */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <Card key={i} className="glass-card animate-pulse">
-              <CardContent className="p-6">
-                <div className="space-y-3">
-                  <div className="h-4 bg-muted rounded w-3/4"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
-                  <div className="h-2 bg-muted rounded w-full"></div>
-                  <div className="flex gap-2">
-                    <div className="h-6 bg-muted rounded w-16"></div>
-                    <div className="h-6 bg-muted rounded w-20"></div>
+      {/* Clients and Projects Hierarchy */}
+      <div className="space-y-6">
+        {clients.map((client) => {
+          const clientProjects = getClientProjects(client.id);
+          const isExpanded = expandedClients.has(client.id);
+          
+          // Skip clients with no projects when searching
+          if (searchTerm && clientProjects.length === 0) return null;
+
+          return (
+            <Card key={client.id}>
+              <CardHeader 
+                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => toggleClientExpansion(client.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? (
+                        <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <Building2 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl">{client.name}</CardTitle>
+                      <CardDescription>
+                        {client.project_count} projeto{client.project_count !== 1 ? 's' : ''}
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {client.status_color && (
+                      <div 
+                        className={`w-3 h-3 rounded-full ${
+                          client.status_color === 'red' ? 'bg-red-500' :
+                          client.status_color === 'yellow' ? 'bg-yellow-500' :
+                          'bg-green-500'
+                        }`} 
+                      />
+                    )}
+                    <Badge variant="outline">
+                      {clientProjects.length} projeto{clientProjects.length !== 1 ? 's' : ''}
+                    </Badge>
                   </div>
                 </div>
-              </CardContent>
+              </CardHeader>
+
+              {isExpanded && (
+                <CardContent className="pt-0">
+                  <Separator className="mb-6" />
+                  {clientProjects.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {clientProjects.map((project) => (
+                        <ProjectCard
+                          key={project.id}
+                          project={project}
+                          onConnectJira={handleConnectJira}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <FolderOpen className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+                      <p className="text-muted-foreground mb-4">
+                        Este cliente ainda não possui projetos cadastrados.
+                      </p>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setNewProjectModalOpen(true)}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Criar Projeto
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              )}
             </Card>
-          ))}
-        </div>
-      ) : filteredProjects.length === 0 ? (
-        <Card className="glass-card">
-          <CardContent className="p-12 text-center">
-            <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">Nenhum projeto encontrado</h3>
+          );
+        })}
+      </div>
+
+      {clients.length === 0 && (
+        <Card className="p-8">
+          <div className="text-center">
+            <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Nenhum cliente encontrado</h3>
             <p className="text-muted-foreground mb-4">
-              {searchTerm || statusFilter !== 'all'
-                ? 'Tente ajustar os filtros para encontrar projetos.'
-                : 'Você ainda não tem projetos. Que tal criar o primeiro?'}
+              Comece criando seu primeiro projeto e cliente.
             </p>
-            <Button className="bg-gradient-primary hover:opacity-90">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button onClick={() => setNewProjectModalOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
               Criar Primeiro Projeto
             </Button>
-          </CardContent>
+          </div>
         </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProjects.map((project) => (
-            <Card key={project.id} className="glass-card hover:shadow-alpine transition-all duration-300 cursor-pointer">
-              <CardContent className="p-6">
-                <div className="space-y-4">
-                  {/* Project Header */}
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg line-clamp-1">{project.name}</h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                        {project.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Status and Priority */}
-                  <div className="flex gap-2">
-                    <Badge className={getStatusColor(project.status)}>
-                      {project.status}
-                    </Badge>
-                    <Badge variant="outline" className={getPriorityColor('medium')}>
-                      prioridade média
-                    </Badge>
-                  </div>
-
-                  {/* Progress */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span>Progresso</span>
-                      <span className="font-medium">{getProgressPercentage(project)}%</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-gradient-primary h-2 rounded-full transition-all duration-500"
-                        style={{ width: `${getProgressPercentage(project)}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Project Details */}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    {project.budget && (
-                      <div className="flex items-center space-x-2">
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Orçamento:</span>
-                        <span className="font-medium">{formatCurrency(project.budget)}</span>
-                      </div>
-                    )}
-                    {project.end_date && (
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Prazo:</span>
-                        <span className="font-medium">{formatDate(project.end_date)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* AI Insights - Mock since not in current schema */}
-                  <div className="p-3 rounded-lg bg-primary-light border border-primary/20">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <AlertTriangle className="h-4 w-4 text-primary" />
-                      <span className="text-sm font-medium text-primary">IA Insights</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      Projeto está dentro do cronograma previsto. Considere revisar o orçamento.
-                    </p>
-                  </div>
-
-                  {/* Action Button */}
-                  <Button 
-                    variant="outline" 
-                    className="w-full hover:bg-accent"
-                    onClick={() => setSelectedProjectId(project.id)}
-                  >
-                    Ver Detalhes
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       )}
 
-      {/* Modals */}
-      <NewProjectModal
-        open={showNewProjectModal}
-        onOpenChange={setShowNewProjectModal}
-        onProjectCreated={fetchProjects}
+      <NewProjectModal 
+        open={newProjectModalOpen}
+        onOpenChange={setNewProjectModalOpen}
+        onProjectCreated={loadData}
       />
-      {selectedProjectId && (
-        <ProjectDetailsModal
-          open={!!selectedProjectId}
-          onOpenChange={(open) => !open && setSelectedProjectId(null)}
-          projectId={selectedProjectId}
-        />
-      )}
+
+      <JiraConfigModal
+        isOpen={jiraModalOpen}
+        onClose={() => {
+          setJiraModalOpen(false);
+          setSelectedProject(null);
+        }}
+        onSave={loadData}
+      />
     </div>
   );
-};
-
-export default Projects;
+}

@@ -55,22 +55,34 @@ export type Database = {
           contact_info: Json | null
           created_at: string | null
           id: string
+          last_health_update: string | null
           name: string
           organization_id: string | null
+          overall_health: Json | null
+          risk_level: string | null
+          status_color: string | null
         }
         Insert: {
           contact_info?: Json | null
           created_at?: string | null
           id?: string
+          last_health_update?: string | null
           name: string
           organization_id?: string | null
+          overall_health?: Json | null
+          risk_level?: string | null
+          status_color?: string | null
         }
         Update: {
           contact_info?: Json | null
           created_at?: string | null
           id?: string
+          last_health_update?: string | null
           name?: string
           organization_id?: string | null
+          overall_health?: Json | null
+          risk_level?: string | null
+          status_color?: string | null
         }
         Relationships: [
           {
@@ -183,6 +195,7 @@ export type Database = {
       jira_configurations: {
         Row: {
           api_token_encrypted: string | null
+          client_id: string | null
           created_at: string
           id: string
           jira_url: string
@@ -195,6 +208,7 @@ export type Database = {
         }
         Insert: {
           api_token_encrypted?: string | null
+          client_id?: string | null
           created_at?: string
           id?: string
           jira_url: string
@@ -207,6 +221,7 @@ export type Database = {
         }
         Update: {
           api_token_encrypted?: string | null
+          client_id?: string | null
           created_at?: string
           id?: string
           jira_url?: string
@@ -218,6 +233,13 @@ export type Database = {
           username?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "jira_configurations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "jira_configurations_organization_id_fkey"
             columns: ["organization_id"]

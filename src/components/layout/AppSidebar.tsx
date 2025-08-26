@@ -31,25 +31,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 const navigationItems = [
   {
-    title: 'Dashboard',
-    url: '/',
+    title: "One Page View",
+    url: "/",
     icon: LayoutDashboard,
   },
   {
-    title: 'Projetos',
-    url: '/projects',
+    title: "Projetos",
+    url: "/projects",
     icon: FolderOpen,
   },
-  {
-    title: 'Cockpit Jira + IA',
-    url: '/jira-cockpit',
-    icon: BarChart3,
-  },
-  {
-    title: 'Cockpit',
-    url: '/dashboard',
-    icon: LayoutDashboard,
-  },
+];
+
+const settingsItems = [
   {
     title: 'Equipe',
     url: '/team',
@@ -60,9 +53,6 @@ const navigationItems = [
     url: '/academy',
     icon: BookOpen,
   },
-];
-
-const settingsItems = [
   {
     title: 'Configurações',
     url: '/settings',

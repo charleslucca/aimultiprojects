@@ -7,7 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import Index from "./pages/Index";
+import OnePageView from "./pages/OnePageView";
 import Auth from "./pages/Auth";
 import Projects from "./pages/Projects";
 import Dashboard from "./pages/Dashboard";
@@ -42,14 +42,14 @@ const App: React.FC = () => {
             <BrowserRouter>
               <AppLayout>
             <Routes>
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<OnePageView />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/projects" element={<Projects />} />
+              <Route path="/projects/:projectId/jira" element={<JiraCockpit />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/team" element={<Team />} />
-        <Route path="/academy" element={<Academy />} />
-        <Route path="/jira-cockpit" element={<JiraCockpit />} />
-        <Route path="/settings" element={<Settings />} />
+              <Route path="/academy" element={<Academy />} />
+              <Route path="/settings" element={<Settings />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
