@@ -37,7 +37,7 @@ const navigationItems = [
     icon: LayoutDashboard,
   },
   {
-    title: "Projetos",
+    title: "Projetos", 
     url: "/projects",
     icon: FolderOpen,
   },
