@@ -27,21 +27,24 @@ export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
     // Check for workload recommendations
     const workloadRecs = extractArrayFromField(data.workload_recommendations || data.recommendations);
     workloadRecs.forEach((rec: string) => {
-      if (rec.toLowerCase().includes('0%') || rec.toLowerCase().includes('completion rate')) {
+      // Ensure rec is a string before calling string methods
+      const recText = typeof rec === 'string' ? rec : String(rec || '');
+      
+      if (recText.toLowerCase().includes('0%') || recText.toLowerCase().includes('completion rate')) {
         alerts.push({
           type: 'HR',
           severity: 'CRITICAL',
           title: '🔥 Membro com 0% de Conclusão',
-          description: rec,
+          description: recText,
           icon: 'AlertTriangle',
           actionRequired: true
         });
-      } else if (rec.toLowerCase().includes('sobrecarga') || rec.toLowerCase().includes('burnout')) {
+      } else if (recText.toLowerCase().includes('sobrecarga') || recText.toLowerCase().includes('burnout')) {
         alerts.push({
           type: 'HR',
           severity: 'HIGH',
           title: '⚠️ Risco de Burnout Detectado',
-          description: rec,
+          description: recText,
           icon: 'Users',
           actionRequired: true
         });
@@ -69,12 +72,14 @@ export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
   if (type === 'cost_analysis' || type === 'budget_alerts') {
     const budgetIssues = extractArrayFromField(data.budget_issues || data.financial_impact);
     budgetIssues.forEach((issue: string) => {
-      if (issue.toLowerCase().includes('sem valor') || issue.toLowerCase().includes('sem estimativa')) {
+      const issueText = typeof issue === 'string' ? issue : String(issue || '');
+      
+      if (issueText.toLowerCase().includes('sem valor') || issueText.toLowerCase().includes('sem estimativa')) {
         alerts.push({
           type: 'FINANCIAL',
           severity: 'HIGH',
           title: '💰 Issues sem Estimativa',
-          description: issue,
+          description: issueText,
           icon: 'DollarSign',
           actionRequired: true
         });
@@ -109,21 +114,23 @@ export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
     // Check workflow issues
     const workflowIssues = extractArrayFromField(data.workflow_issues || data.risk_factors);
     workflowIssues.forEach((issue: string) => {
-      if (issue.toLowerCase().includes('sem assignee') || issue.toLowerCase().includes('sem responsável')) {
+      const issueText = typeof issue === 'string' ? issue : String(issue || '');
+      
+      if (issueText.toLowerCase().includes('sem assignee') || issueText.toLowerCase().includes('sem responsável')) {
         alerts.push({
           type: 'SLA',
           severity: 'HIGH',
           title: '⚠️ Issues sem Responsável',
-          description: issue,
+          description: issueText,
           icon: 'UserMinus',
           actionRequired: true
         });
-      } else if (issue.toLowerCase().includes('excesso') && issue.toLowerCase().includes('doing')) {
+      } else if (issueText.toLowerCase().includes('excesso') && issueText.toLowerCase().includes('doing')) {
         alerts.push({
           type: 'SLA',
           severity: 'HIGH',
           title: '⚠️ Gargalo no Workflow',
-          description: issue,
+          description: issueText,
           icon: 'BarChart3',
           actionRequired: true
         });
@@ -206,18 +213,19 @@ export const extractArrayFromField = (field: any): string[] => {
   if (!field) return [];
   
   if (Array.isArray(field)) {
-    return field.filter(Boolean);
+    return field.filter(Boolean).map(item => typeof item === 'string' ? item : String(item || ''));
   }
   
   if (typeof field === 'object' && field !== null) {
-    return Object.values(field).filter(Boolean) as string[];
+    return Object.values(field).filter(Boolean).map(item => typeof item === 'string' ? item : String(item || ''));
   }
   
   if (typeof field === 'string') {
     return [field];
   }
   
-  return [];
+  // Convert other types to string
+  return [String(field || '')];
 };
 
 // Process insight to add enhanced metadata
