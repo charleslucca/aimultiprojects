@@ -15,7 +15,8 @@ import {
   BarChart3,
   CheckCircle2,
   AlertCircle,
-  Info
+  Info,
+  UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +26,73 @@ interface InsightDetailModalProps {
   insight: any;
   relatedIssue?: any;
 }
+
+// Utility function to safely render any content (objects, arrays, strings)
+const renderSafeContent = (content: any): React.ReactNode => {
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  if (typeof content === 'number') {
+    return content.toString();
+  }
+  
+  if (content === null || content === undefined) {
+    return 'N/A';
+  }
+  
+  if (Array.isArray(content)) {
+    return (
+      <ul className="space-y-1">
+        {content.map((item, index) => (
+          <li key={index} className="flex items-start gap-2">
+            <div className="h-1.5 w-1.5 bg-primary rounded-full mt-2 flex-shrink-0" />
+            <span>{renderSafeContent(item)}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  
+  if (typeof content === 'object') {
+    // Handle specific object structures
+    if (content.suggestions && Array.isArray(content.suggestions)) {
+      return (
+        <div className="space-y-2">
+          <div className="text-sm font-medium text-primary">Sugestões da Equipe:</div>
+          {content.suggestions.map((suggestion: any, index: number) => (
+            <div key={index} className="p-2 bg-primary/5 rounded border-l-2 border-primary">
+              {suggestion.member && (
+                <div className="flex items-center gap-2 mb-1">
+                  <UserCheck className="h-3 w-3 text-primary" />
+                  <span className="text-sm font-medium">{suggestion.member}</span>
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground">{suggestion.recommendation || suggestion.description || 'N/A'}</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    
+    // Handle other object structures
+    const entries = Object.entries(content);
+    if (entries.length === 0) return 'N/A';
+    
+    return (
+      <div className="space-y-1">
+        {entries.map(([key, value], index) => (
+          <div key={index} className="text-sm">
+            <span className="font-medium capitalize">{key.replace(/_/g, ' ')}: </span>
+            <span className="text-muted-foreground">{renderSafeContent(value)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  
+  return String(content);
+};
 
 const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
   open,
@@ -148,18 +216,9 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {Array.isArray(insightData.key_findings) ? (
-                    <ul className="space-y-2">
-                      {insightData.key_findings.map((finding: string, index: number) => (
-                        <li key={index} className="flex items-start gap-2">
-                          <div className="h-2 w-2 bg-primary rounded-full mt-2 flex-shrink-0" />
-                          <span className="text-muted-foreground">{finding}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-muted-foreground">{insightData.key_findings}</p>
-                  )}
+                   <div className="text-muted-foreground">
+                     {renderSafeContent(insightData.key_findings)}
+                   </div>
                 </CardContent>
               </Card>
             )}
@@ -223,19 +282,19 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                       recommendations = [insightData.recommendations];
                     }
                     
-                    return recommendations.length > 0 ? (
-                      <div className="space-y-3">
-                        {recommendations.map((rec: string, index: number) => (
-                          <div key={index} className="p-3 bg-primary/5 border-l-4 border-primary rounded-r-lg">
-                            <p className="text-muted-foreground">{rec}</p>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-muted/5 border-l-4 border-muted rounded-r-lg">
-                        <p className="text-muted-foreground">Nenhuma recomendação disponível</p>
-                      </div>
-                    );
+                     return recommendations.length > 0 ? (
+                       <div className="space-y-3">
+                         {recommendations.map((rec: any, index: number) => (
+                           <div key={index} className="p-3 bg-primary/5 border-l-4 border-primary rounded-r-lg">
+                             <div className="text-muted-foreground">{renderSafeContent(rec)}</div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="p-3 bg-muted/5 border-l-4 border-muted rounded-r-lg">
+                         <p className="text-muted-foreground">Nenhuma recomendação disponível</p>
+                       </div>
+                     );
                   })()}
                 </CardContent>
               </Card>
@@ -262,21 +321,21 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                       riskFactors = [insightData.risk_factors];
                     }
                     
-                    return riskFactors.length > 0 ? (
-                      <div className="space-y-2">
-                        {riskFactors.map((risk: string, index: number) => (
-                          <div key={index} className="flex items-start gap-2 p-2 bg-warning/5 rounded">
-                            <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
-                            <span className="text-muted-foreground">{risk}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2 p-2 bg-muted/5 rounded">
-                        <AlertTriangle className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
-                        <span className="text-muted-foreground">Nenhum fator de risco identificado</span>
-                      </div>
-                    );
+                     return riskFactors.length > 0 ? (
+                       <div className="space-y-2">
+                         {riskFactors.map((risk: any, index: number) => (
+                           <div key={index} className="flex items-start gap-2 p-2 bg-warning/5 rounded">
+                             <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                             <div className="text-muted-foreground flex-1">{renderSafeContent(risk)}</div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="flex items-start gap-2 p-2 bg-muted/5 rounded">
+                         <AlertTriangle className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
+                         <span className="text-muted-foreground">Nenhum fator de risco identificado</span>
+                       </div>
+                     );
                   })()}
                 </CardContent>
               </Card>
@@ -303,21 +362,21 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                       actionItems = [insightData.action_items];
                     }
                     
-                    return actionItems.length > 0 ? (
-                      <div className="space-y-2">
-                        {actionItems.map((action: string, index: number) => (
-                          <div key={index} className="flex items-start gap-2 p-2 bg-success/5 rounded">
-                            <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                            <span className="text-muted-foreground">{action}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-2 p-2 bg-muted/5 rounded">
-                        <CheckCircle2 className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
-                        <span className="text-muted-foreground">Nenhuma ação específica recomendada</span>
-                      </div>
-                    );
+                     return actionItems.length > 0 ? (
+                       <div className="space-y-2">
+                         {actionItems.map((action: any, index: number) => (
+                           <div key={index} className="flex items-start gap-2 p-2 bg-success/5 rounded">
+                             <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                             <div className="text-muted-foreground flex-1">{renderSafeContent(action)}</div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <div className="flex items-start gap-2 p-2 bg-muted/5 rounded">
+                         <CheckCircle2 className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
+                         <span className="text-muted-foreground">Nenhuma ação específica recomendada</span>
+                       </div>
+                     );
                   })()}
                 </CardContent>
               </Card>
