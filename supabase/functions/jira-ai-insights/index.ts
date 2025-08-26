@@ -204,7 +204,12 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
           project_id: projectId,
           insight_type: 'sla_risk',
           confidence_score: analysis.risk_score,
-          insight_data: analysis,
+          insight_data: {
+            ...analysis,
+            recommendations: Array.isArray(analysis.recommendations) 
+              ? analysis.recommendations 
+              : [analysis.recommendations || "Revisar prioridade do issue"]
+          },
           expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
         });
 
@@ -307,7 +312,13 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
           project_id: projectId,
           insight_type: 'sprint_prediction',
           confidence_score: analysis.completion_probability,
-          insight_data: { ...analysis, sprint_name: sprint.name },
+          insight_data: { 
+            ...analysis, 
+            sprint_name: sprint.name,
+            recommendations: Array.isArray(analysis.recommendations) 
+              ? analysis.recommendations 
+              : [analysis.recommendations || "Previsão de sprint calculada"]
+          },
           expires_at: sprint.end_date
         });
 
@@ -416,7 +427,13 @@ async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string,
         project_id: projectId,
         insight_type: 'team_performance',
         confidence_score: analysis.team_health_score || 0.8,
-        insight_data: { ...analysis, team_stats: teamStats },
+        insight_data: { 
+          ...analysis, 
+          team_stats: teamStats,
+          recommendations: Array.isArray(analysis.workload_recommendations) 
+            ? analysis.workload_recommendations 
+            : [analysis.workload_recommendations || "Análise de performance da equipe concluída"]
+        },
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
       });
 
@@ -704,7 +721,10 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
           ...analysis,
           total_cost: totalProjectCost,
           completed_cost: completedIssueCost,
-          cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0
+          cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0,
+          recommendations: Array.isArray(analysis.budget_recommendations) 
+            ? analysis.budget_recommendations 
+            : [analysis.budget_recommendations || "Análise de custos concluída"]
         },
         expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
       });
@@ -955,19 +975,22 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
     
     const analysis = JSON.parse(content);
 
-      // Store insight in database
-      await supabaseClient
-        .from('jira_ai_insights')
-        .insert({
-          project_id: projectId,
-          insight_type: 'budget_alerts',
+    // Store insight in database
+    await supabaseClient
+      .from('jira_ai_insights')
+      .insert({
+        project_id: projectId,
+        insight_type: 'budget_alerts',
         confidence_score: analysis.financial_risk_score || 0.5,
         insight_data: {
           ...analysis,
           projected_total_cost: projectedTotalCost,
           current_spend: totalBudgetSpent,
           spend_rate: spendRate,
-          completion_rate: completionRate
+          completion_rate: completionRate,
+          recommendations: Array.isArray(analysis.optimization_suggestions) 
+            ? analysis.optimization_suggestions 
+            : [analysis.optimization_suggestions || "Monitorar orçamento e gastos do projeto"]
         },
         expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
       });
