@@ -229,7 +229,7 @@ export default function Projects() {
       });
 
       // Reload data to reflect changes
-      loadData();
+      await loadData();
     } catch (error: any) {
       toast({
         title: "Erro ao excluir cliente",
