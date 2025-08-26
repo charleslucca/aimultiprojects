@@ -23,6 +23,7 @@ interface ProjectFormData {
   start_date: string;
   end_date: string;
   client_id: string;
+  new_client_name: string;
 }
 
 export const NewProjectModal = ({ open, onOpenChange, onProjectCreated }: NewProjectModalProps) => {
@@ -36,8 +37,11 @@ export const NewProjectModal = ({ open, onOpenChange, onProjectCreated }: NewPro
     budget: '',
     start_date: '',
     end_date: '',
-    client_id: ''
+    client_id: '',
+    new_client_name: ''
   });
+  
+  const [createNewClient, setCreateNewClient] = useState(false);
 
   // Load clients when modal opens
   React.useEffect(() => {
@@ -69,6 +73,23 @@ export const NewProjectModal = ({ open, onOpenChange, onProjectCreated }: NewPro
     setLoading(true);
 
     try {
+      let clientId = formData.client_id;
+
+      // Create new client if needed
+      if (createNewClient && formData.new_client_name.trim()) {
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
+          .insert([{
+            name: formData.new_client_name.trim(),
+            status_color: 'green'
+          }])
+          .select()
+          .single();
+
+        if (clientError) throw clientError;
+        clientId = newClient.id;
+      }
+
       const projectData = {
         name: formData.name,
         description: formData.description,
@@ -76,7 +97,7 @@ export const NewProjectModal = ({ open, onOpenChange, onProjectCreated }: NewPro
         budget: formData.budget ? parseFloat(formData.budget) : null,
         start_date: formData.start_date || null,
         end_date: formData.end_date || null,
-        client_id: formData.client_id || null,
+        client_id: clientId || null,
         metadata: {}
       };
 
@@ -99,8 +120,10 @@ export const NewProjectModal = ({ open, onOpenChange, onProjectCreated }: NewPro
         budget: '',
         start_date: '',
         end_date: '',
-        client_id: ''
+        client_id: '',
+        new_client_name: ''
       });
+      setCreateNewClient(false);
 
       onProjectCreated();
       onOpenChange(false);
@@ -188,18 +211,46 @@ export const NewProjectModal = ({ open, onOpenChange, onProjectCreated }: NewPro
 
             <div className="space-y-2">
               <Label htmlFor="client">Cliente</Label>
-              <Select value={formData.client_id} onValueChange={(value) => updateFormData('client_id', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {createNewClient ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Nome do novo cliente"
+                    value={formData.new_client_name}
+                    onChange={(e) => updateFormData('new_client_name', e.target.value)}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCreateNewClient(false)}
+                  >
+                    Selecionar Cliente Existente
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Select value={formData.client_id} onValueChange={(value) => updateFormData('client_id', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecionar cliente (opcional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCreateNewClient(true)}
+                  >
+                    + Criar Novo Cliente
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 

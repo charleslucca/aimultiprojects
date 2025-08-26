@@ -87,6 +87,12 @@ export default function Projects() {
 
       if (clientsError) throw clientsError;
 
+      // Check if there are orphaned projects (projects without client_id)
+      const { count: orphanedCount } = await supabase
+        .from('projects')
+        .select('*', { count: 'exact', head: true })
+        .is('client_id', null);
+
       // Count projects per client
       const clientsWithCounts = await Promise.all(
         (clientsData || []).map(async (client) => {
@@ -101,6 +107,22 @@ export default function Projects() {
           };
         })
       );
+
+      // Add virtual "Sem Cliente" if there are orphaned projects
+      if (orphanedCount && orphanedCount > 0) {
+        clientsWithCounts.unshift({
+          id: 'orphaned',
+          name: 'Projetos sem Cliente',
+          status_color: 'yellow',
+          project_count: orphanedCount,
+          contact_info: null,
+          created_at: null,
+          last_health_update: null,
+          organization_id: null,
+          overall_health: null,
+          risk_level: 'medium',
+        });
+      }
 
       setClients(clientsWithCounts);
 
@@ -142,7 +164,11 @@ export default function Projects() {
     let filtered = projects;
 
     if (selectedClientId) {
-      filtered = filtered.filter(project => project.client_id === selectedClientId);
+      if (selectedClientId === 'orphaned') {
+        filtered = filtered.filter(project => !project.client_id);
+      } else {
+        filtered = filtered.filter(project => project.client_id === selectedClientId);
+      }
     }
 
     if (searchTerm) {
@@ -172,6 +198,9 @@ export default function Projects() {
   };
 
   const getClientProjects = (clientId: string) => {
+    if (clientId === 'orphaned') {
+      return filteredProjects.filter(project => !project.client_id);
+    }
     return filteredProjects.filter(project => project.client_id === clientId);
   };
 
