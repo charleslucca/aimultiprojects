@@ -12,20 +12,28 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+  const startTime = Date.now();
+  
+  // Implement function timeout (25 seconds)
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Function timeout: Operation exceeded 25 seconds')), 25000)
+  );
 
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
+  const workPromise = async () => {
+    try {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
 
-    const { action, issue_ids, project_keys, config_id, project_id } = await req.json();
-    
-    console.log('Received request:', { action, issue_ids, project_keys, config_id, project_id });
+      const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+      if (!openAIApiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
+
+      const { action, issue_ids, project_keys, config_id, project_id } = await req.json();
+      
+      console.log('Received request:', { action, issue_ids, project_keys, config_id, project_id, timestamp: new Date().toISOString() });
 
     if (action === 'generate_sla_risk_insights') {
       const insights = await generateSLARiskInsights(supabaseClient, openAIApiKey, issue_ids, project_id);
@@ -97,9 +105,33 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`Error in jira-ai-insights function after ${duration}ms:`, error);
+      return new Response(JSON.stringify({ 
+        error: error.message,
+        duration_ms: duration,
+        timestamp: new Date().toISOString()
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  };
+
+  try {
+    const result = await Promise.race([workPromise(), timeoutPromise]);
+    const duration = Date.now() - startTime;
+    console.log(`Function completed successfully in ${duration}ms`);
+    return result;
   } catch (error) {
-    console.error('Error in jira-ai-insights function:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    const duration = Date.now() - startTime;
+    console.error(`Function failed after ${duration}ms:`, error);
+    return new Response(JSON.stringify({ 
+      error: error.message,
+      duration_ms: duration,
+      timestamp: new Date().toISOString()
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -129,6 +161,9 @@ async function generateProjectInsights(supabaseClient: any, openAIApiKey: string
 }
 
 async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string, issueIds?: string[], projectId?: string) {
+  console.log('Starting SLA risk analysis...');
+  const startTime = Date.now();
+
   // Get issues that are at risk of SLA breach
   let query = supabaseClient
     .from('jira_issues')
@@ -142,92 +177,130 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
   const { data: issues, error } = await query;
   if (error) throw error;
 
+  console.log(`Analyzing ${issues.length} issues for SLA risk`);
   const insights = [];
   
-  for (const issue of issues) {
-    const prompt = `
-    Analyze this Jira issue for SLA breach risk:
+  // Process in batches for better performance (max 5 at a time)
+  for (let i = 0; i < issues.length; i += 5) {
+    const batch = issues.slice(i, i + 5);
     
-    Issue: ${issue.summary}
-    Type: ${issue.issue_type}
-    Priority: ${issue.priority}
-    Status: ${issue.status}
-    Created: ${issue.created_date}
-    Updated: ${issue.updated_date}
-    Story Points: ${issue.story_points}
-    Time Spent: ${issue.time_spent} seconds
-    Original Estimate: ${issue.original_estimate} seconds
-    Remaining Estimate: ${issue.remaining_estimate} seconds
+    // Check timeout (20s max for this function)
+    if (Date.now() - startTime > 20000) {
+      console.log('SLA analysis timeout, processing partial results');
+      break;
+    }
     
-    Based on this information, provide:
-    1. SLA risk score (0-1)
-    2. Risk factors
-    3. Recommended actions
-    4. Estimated completion time
-    
-    Respond in JSON format with keys: risk_score, risk_factors, recommendations, estimated_completion_days
-    `;
-
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openAIApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: 'You are an expert project manager analyzing Jira issues for SLA risk. Always respond with valid JSON.' },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 1000,
-          temperature: 0.3,
-        }),
-      });
-
-      const aiResponse = await response.json();
-      let content = aiResponse.choices[0].message.content;
+    const batchPromises = batch.map(async (issue) => {
+      const prompt = `
+      Analyze this Jira issue for SLA breach risk:
       
-      // Remove markdown formatting if present
-      if (content.includes('```json')) {
-        content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
-      }
+      Issue: ${issue.summary}
+      Type: ${issue.issue_type}
+      Priority: ${issue.priority}
+      Status: ${issue.status}
+      Created: ${issue.created_date}
+      Story Points: ${issue.story_points}
       
-      const analysis = JSON.parse(content);
+      Provide concise JSON with: risk_score (0-1), risk_factors (array), recommendations (array), estimated_completion_days
+      `;
 
-      // Store insight in database
-      await supabaseClient
-        .from('jira_ai_insights')
-        .insert({
-          issue_id: issue.id,
-          project_id: projectId,
-          insight_type: 'sla_risk',
-          confidence_score: analysis.risk_score,
-          insight_data: {
-            ...analysis,
-            recommendations: Array.isArray(analysis.recommendations) 
-              ? analysis.recommendations 
-              : [analysis.recommendations || "Revisar prioridade do issue"]
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout per issue
+
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openAIApiKey}`,
+            'Content-Type': 'application/json',
           },
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: 'You are an expert project manager. Respond with valid JSON only.' },
+              { role: 'user', content: prompt }
+            ],
+            max_tokens: 500, // Reduced for speed
+            temperature: 0.3,
+          }),
+          signal: controller.signal,
         });
 
-      insights.push({
-        issue_id: issue.id,
-        issue_key: issue.jira_key,
-        ...analysis
-      });
+        clearTimeout(timeout);
 
-    } catch (error) {
-      console.error(`Failed to analyze issue ${issue.jira_key}:`, error);
-    }
+        if (!response.ok) {
+          throw new Error(`OpenAI API error: ${response.status}`);
+        }
+
+        const aiResponse = await response.json();
+        let content = aiResponse.choices[0].message.content;
+        
+        // Clean content
+        if (content.includes('```json')) {
+          content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
+        }
+        
+        const analysis = JSON.parse(content);
+
+        // Store insight in database
+        await supabaseClient
+          .from('jira_ai_insights')
+          .insert({
+            issue_id: issue.id,
+            project_id: projectId,
+            insight_type: 'sla_risk',
+            confidence_score: analysis.risk_score,
+            insight_data: {
+              ...analysis,
+              recommendations: Array.isArray(analysis.recommendations) 
+                ? analysis.recommendations 
+                : [analysis.recommendations || "Revisar prioridade do issue"]
+            },
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          });
+
+        return {
+          issue_id: issue.id,
+          issue_key: issue.jira_key,
+          analysis
+        };
+      } catch (error) {
+        console.error(`Error analyzing issue ${issue.jira_key}:`, error);
+        // Create a fallback insight
+        await supabaseClient
+          .from('jira_ai_insights')
+          .insert({
+            issue_id: issue.id,
+            project_id: projectId,
+            insight_type: 'sla_risk',
+            confidence_score: 0.5,
+            insight_data: {
+              risk_score: 0.5,
+              risk_factors: ['Análise automática indisponível'],
+              recommendations: ['Revisar manualmente este issue'],
+              estimated_completion_days: 3
+            },
+            expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          });
+        
+        return null;
+      }
+    });
+
+    const batchResults = await Promise.allSettled(batchPromises);
+    insights.push(...batchResults.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value));
   }
 
+  const duration = Date.now() - startTime;
+  console.log(`SLA risk analysis completed in ${duration}ms for ${insights.length} issues`);
+  
   return insights;
 }
 
 async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string, projectKeys: string[], projectId?: string) {
+  console.log('Starting sprint prediction analysis...');
+  const startTime = Date.now();
+
   // Get active sprints and their issues
   const { data: sprints, error: sprintError } = await supabaseClient
     .from('jira_sprints')
@@ -237,9 +310,16 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
 
   if (sprintError) throw sprintError;
 
+  console.log(`Analyzing ${sprints.length} active sprints`);
   const predictions = [];
 
   for (const sprint of sprints) {
+    // Check timeout (15s max for this function)
+    if (Date.now() - startTime > 15000) {
+      console.log('Sprint prediction timeout, processing partial results');
+      break;
+    }
+
     const { data: issues, error: issuesError } = await supabaseClient
       .from('jira_issues')
       .select('*')
@@ -253,31 +333,21 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
       .reduce((sum: number, issue: any) => sum + (issue.story_points || 0), 0);
 
     const prompt = `
-    Analyze this sprint for completion prediction:
+    Analyze sprint completion prediction:
     
     Sprint: ${sprint.name}
-    Goal: ${sprint.goal}
-    Start Date: ${sprint.start_date}
-    End Date: ${sprint.end_date}
     Total Story Points: ${totalStoryPoints}
-    Completed Story Points: ${completedStoryPoints}
-    Remaining Story Points: ${totalStoryPoints - completedStoryPoints}
-    Total Issues: ${issues.length}
-    Completed Issues: ${issues.filter((i: any) => i.status === 'Done').length}
+    Completed: ${completedStoryPoints}
+    Remaining: ${totalStoryPoints - completedStoryPoints}
+    Progress: ${totalStoryPoints > 0 ? ((completedStoryPoints / totalStoryPoints) * 100).toFixed(1) : 0}%
     
-    Issues breakdown:
-    ${issues.map((issue: any) => `- ${issue.jira_key}: ${issue.status} (${issue.story_points || 0} SP)`).join('\n')}
-    
-    Provide sprint completion prediction with:
-    1. Completion probability (0-1)
-    2. Risk factors
-    3. Recommendations for improvement
-    4. Velocity insights
-    
-    Respond in JSON format with keys: completion_probability, risk_factors, recommendations, velocity_insights
+    Provide JSON with: completion_probability (0-1), risk_factors (array), recommendations (array), velocity_insights
     `;
 
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout per sprint
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -287,18 +357,25 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: 'You are an expert Scrum Master analyzing sprint data. Always respond with valid JSON.' },
+            { role: 'system', content: 'You are an expert Scrum Master. Respond with valid JSON only.' },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 1500,
+          max_tokens: 800, // Reduced for speed
           temperature: 0.3,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.status}`);
+      }
 
       const aiResponse = await response.json();
       let content = aiResponse.choices[0].message.content;
       
-      // Remove markdown formatting if present
+      // Clean content
       if (content.includes('```json')) {
         content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
       }
@@ -330,9 +407,27 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
       });
 
     } catch (error) {
-      console.error(`Failed to analyze sprint ${sprint.name}:`, error);
+      console.error(`Error analyzing sprint ${sprint.name}:`, error);
+      // Create fallback prediction
+      await supabaseClient
+        .from('jira_ai_insights')
+        .insert({
+          project_id: projectId,
+          insight_type: 'sprint_prediction',
+          confidence_score: 0.5,
+          insight_data: {
+            completion_probability: 0.5,
+            risk_factors: ['Análise automática indisponível'],
+            recommendations: ['Revisar progresso do sprint manualmente'],
+            velocity_insights: 'Dados insuficientes para análise'
+          },
+          expires_at: sprint.end_date
+        });
     }
   }
+
+  const duration = Date.now() - startTime;
+  console.log(`Sprint prediction analysis completed in ${duration}ms for ${predictions.length} sprints`);
 
   return predictions;
 }

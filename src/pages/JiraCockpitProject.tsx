@@ -165,32 +165,61 @@ const JiraCockpitProject: React.FC = () => {
     }
 
     setIsGenerating(action);
+    const startTime = Date.now();
+    
     try {
-      const { data, error } = await supabase.functions.invoke('jira-ai-insights', {
-        body: { 
-          action,
-          project_id: projectId,
-          project_keys: configuration.project_keys,
-          config_id: configuration.id
-        }
+      toast({
+        title: "Processando...",
+        description: `Iniciando ${buttonText.toLowerCase()}. Isso pode levar até 30 segundos.`,
       });
 
-      if (error) throw error;
+      const apiUtils = await import("@/utils/apiUtils");
+      
+      const data = await apiUtils.invokeSupabaseFunctionWithTimeout('jira-ai-insights', { 
+        action,
+        project_id: projectId,
+        project_keys: configuration.project_keys,
+        config_id: configuration.id
+      }, {
+        timeoutMs: 30000, // 30 seconds
+        retries: 1, // Try once more on failure
+        retryDelayMs: 2000
+      });
 
+      const duration = Date.now() - startTime;
+      
       toast({
         title: "Insight Gerado",
-        description: `${buttonText} concluído com sucesso!`,
+        description: `${buttonText} concluído com sucesso em ${Math.round(duration / 1000)}s!`,
       });
 
       // Reload insights reactively
       await loadProjectData();
 
     } catch (error: any) {
-      toast({
-        title: "Erro ao gerar insight",
-        description: error.message,
-        variant: "destructive",
-      });
+      const duration = Date.now() - startTime;
+      
+      if (error.name === 'TimeoutError') {
+        toast({
+          title: "Tempo limite excedido",
+          description: `A operação demorou mais que 30 segundos. Tente novamente ou verifique a configuração.`,
+          variant: "destructive",
+        });
+      } else if (error.name === 'RetryError') {
+        toast({
+          title: "Falha após múltiplas tentativas",  
+          description: `Tentamos ${error.attempts || 'várias'} vezes em ${Math.round(duration / 1000)}s. Verifique sua conexão e tente novamente.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Erro ao gerar insight",
+          description: error.message || "Erro desconhecido durante a geração do insight",
+          variant: "destructive",
+        });
+      }
+      
+      console.error(`generateInsight(${action}) failed after ${duration}ms:`, error);
     } finally {
       setIsGenerating(null);
     }
