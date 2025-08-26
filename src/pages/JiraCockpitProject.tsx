@@ -131,8 +131,9 @@ const JiraCockpitProject: React.FC = () => {
       // Trigger AI insights generation for this specific project
       await supabase.functions.invoke('jira-ai-insights', {
         body: { 
-          action: 'generate_project_insights',
+          action: 'generate_sla_risk_insights',
           project_id: projectId,
+          project_keys: configuration.project_keys,
           config_id: configuration.id
         }
       });
@@ -490,6 +491,23 @@ const JiraCockpitProject: React.FC = () => {
                     <div className="text-left">
                       <div className="font-medium">Previsão de Sprint</div>
                       <div className="text-xs text-muted-foreground">Probabilidade de conclusão</div>
+                    </div>
+                  </Button>
+
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start h-12"
+                    onClick={() => generateInsight('generate_sla_risk_insights', 'Análise de Riscos SLA')}
+                    disabled={isGenerating === 'generate_sla_risk_insights'}
+                  >
+                    {isGenerating === 'generate_sla_risk_insights' ? (
+                      <RefreshCw className="h-4 w-4 mr-3 animate-spin" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 mr-3" />
+                    )}
+                    <div className="text-left">
+                      <div className="font-medium">Análise de Riscos SLA</div>
+                      <div className="text-xs text-muted-foreground">Identificar issues em risco</div>
                     </div>
                   </Button>
                 </CardContent>

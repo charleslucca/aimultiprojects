@@ -23,24 +23,26 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured');
     }
 
-    const { action, issue_ids, project_keys, config_id } = await req.json();
+    const { action, issue_ids, project_keys, config_id, project_id } = await req.json();
+    
+    console.log('Received request:', { action, issue_ids, project_keys, config_id, project_id });
 
     if (action === 'generate_sla_risk_insights') {
-      const insights = await generateSLARiskInsights(supabaseClient, openAIApiKey, issue_ids);
+      const insights = await generateSLARiskInsights(supabaseClient, openAIApiKey, issue_ids, project_id);
       return new Response(JSON.stringify({ insights }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'predict_sprint_completion') {
-      const prediction = await predictSprintCompletion(supabaseClient, openAIApiKey, project_keys);
+      const prediction = await predictSprintCompletion(supabaseClient, openAIApiKey, project_keys, project_id);
       return new Response(JSON.stringify({ prediction }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'analyze_team_performance') {
-      const analysis = await analyzeTeamPerformance(supabaseClient, openAIApiKey, project_keys);
+      const analysis = await analyzeTeamPerformance(supabaseClient, openAIApiKey, project_keys, project_id);
       return new Response(JSON.stringify({ analysis }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -54,29 +56,38 @@ serve(async (req) => {
     }
 
     if (action === 'sentiment_analysis') {
-      const sentiment = await performSentimentAnalysis(supabaseClient, openAIApiKey, issue_ids);
+      const sentiment = await performSentimentAnalysis(supabaseClient, openAIApiKey, issue_ids, project_id);
       return new Response(JSON.stringify({ sentiment }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'cost_analysis') {
-      const analysis = await performCostAnalysis(supabaseClient, openAIApiKey, project_keys, config_id);
+      const analysis = await performCostAnalysis(supabaseClient, openAIApiKey, project_keys, config_id, project_id);
       return new Response(JSON.stringify({ analysis }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'productivity_economics') {
-      const economics = await analyzeProductivityEconomics(supabaseClient, openAIApiKey, project_keys, config_id);
+      const economics = await analyzeProductivityEconomics(supabaseClient, openAIApiKey, project_keys, config_id, project_id);
       return new Response(JSON.stringify({ economics }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     if (action === 'budget_alerts') {
-      const alerts = await generateBudgetAlerts(supabaseClient, openAIApiKey, project_keys, config_id);
+      const alerts = await generateBudgetAlerts(supabaseClient, openAIApiKey, project_keys, config_id, project_id);
       return new Response(JSON.stringify({ alerts }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Handle project-specific insight generation
+    if (action === 'generate_project_insights') {
+      console.log('Generating project insights for project_id:', project_id);
+      const results = await generateProjectInsights(supabaseClient, openAIApiKey, project_keys, config_id, project_id);
+      return new Response(JSON.stringify({ results }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -95,7 +106,29 @@ serve(async (req) => {
   }
 });
 
-async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string, issueIds?: string[]) {
+// Project-specific insight generation function
+async function generateProjectInsights(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, projectId?: string) {
+  console.log('Starting project insights generation for:', { projectKeys, configId, projectId });
+  
+  try {
+    // Generate SLA risk insights
+    await generateSLARiskInsights(supabaseClient, openAIApiKey, undefined, projectId);
+    
+    // Generate sprint predictions
+    await predictSprintCompletion(supabaseClient, openAIApiKey, projectKeys, projectId);
+    
+    // Generate team performance analysis
+    await analyzeTeamPerformance(supabaseClient, openAIApiKey, projectKeys, projectId);
+    
+    console.log('Project insights generation completed successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in generateProjectInsights:', error);
+    throw error;
+  }
+}
+
+async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string, issueIds?: string[], projectId?: string) {
   // Get issues that are at risk of SLA breach
   let query = supabaseClient
     .from('jira_issues')
@@ -168,6 +201,7 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
         .from('jira_ai_insights')
         .insert({
           issue_id: issue.id,
+          project_id: projectId,
           insight_type: 'sla_risk',
           confidence_score: analysis.risk_score,
           insight_data: analysis,
@@ -188,7 +222,7 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
   return insights;
 }
 
-async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string, projectKeys: string[]) {
+async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string, projectKeys: string[], projectId?: string) {
   // Get active sprints and their issues
   const { data: sprints, error: sprintError } = await supabaseClient
     .from('jira_sprints')
@@ -270,10 +304,10 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
       await supabaseClient
         .from('jira_ai_insights')
         .insert({
-          project_id: sprint.id,
+          project_id: projectId,
           insight_type: 'sprint_prediction',
           confidence_score: analysis.completion_probability,
-          insight_data: analysis,
+          insight_data: { ...analysis, sprint_name: sprint.name },
           expires_at: sprint.end_date
         });
 
@@ -292,7 +326,7 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
   return predictions;
 }
 
-async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string, projectKeys: string[]) {
+async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string, projectKeys: string[], projectId?: string) {
   // Get all available project keys if none specified in config
   const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
   
@@ -375,6 +409,17 @@ async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string,
     
     const analysis = JSON.parse(content);
 
+    // Store insight in database
+    await supabaseClient
+      .from('jira_ai_insights')
+      .insert({
+        project_id: projectId,
+        insight_type: 'team_performance',
+        confidence_score: analysis.team_health_score || 0.8,
+        insight_data: { ...analysis, team_stats: teamStats },
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+      });
+
     return {
       team_stats: teamStats,
       ...analysis
@@ -454,7 +499,7 @@ async function suggestPriorityRebalancing(supabaseClient: any, openAIApiKey: str
   }
 }
 
-async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: string, issueIds: string[]) {
+async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: string, issueIds: string[], projectId?: string) {
   const { data: issues, error } = await supabaseClient
     .from('jira_issues')
     .select('*')
@@ -515,6 +560,7 @@ async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: strin
         .from('jira_ai_insights')
         .insert({
           issue_id: issue.id,
+          project_id: projectId,
           insight_type: 'sentiment',
           confidence_score: Math.abs(analysis.sentiment_score),
           insight_data: analysis,
@@ -535,7 +581,7 @@ async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: strin
   return analyses;
 }
 
-async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, projectId?: string) {
   // Get all available project keys if none specified
   const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
   
@@ -651,6 +697,7 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
     await supabaseClient
       .from('jira_ai_insights')
       .insert({
+        project_id: projectId,
         insight_type: 'cost_analysis',
         confidence_score: analysis.cost_efficiency_score || 0.8,
         insight_data: {
@@ -675,7 +722,7 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
   }
 }
 
-async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, projectId?: string) {
   // Get all available project keys if none specified
   const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
   
@@ -787,6 +834,7 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
     await supabaseClient
       .from('jira_ai_insights')
       .insert({
+        project_id: projectId,
         insight_type: 'productivity_economics',
         confidence_score: analysis.team_productivity_score || 0.8,
         insight_data: {
@@ -807,7 +855,7 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
   }
 }
 
-async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string) {
+async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, projectId?: string) {
   // Get all available project keys if none specified
   const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
   
@@ -907,11 +955,12 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
     
     const analysis = JSON.parse(content);
 
-    // Store insight in database
-    await supabaseClient
-      .from('jira_ai_insights')
-      .insert({
-        insight_type: 'budget_alerts',
+      // Store insight in database
+      await supabaseClient
+        .from('jira_ai_insights')
+        .insert({
+          project_id: projectId,
+          insight_type: 'budget_alerts',
         confidence_score: analysis.financial_risk_score || 0.5,
         insight_data: {
           ...analysis,
