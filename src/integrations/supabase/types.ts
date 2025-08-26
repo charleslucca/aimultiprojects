@@ -818,6 +818,169 @@ export type Database = {
           },
         ]
       }
+      smart_delivery_sessions: {
+        Row: {
+          created_at: string
+          delivery_type: string
+          id: string
+          project_id: string | null
+          results: Json | null
+          session_data: Json
+          session_metadata: Json | null
+          session_name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_type: string
+          id?: string
+          project_id?: string | null
+          results?: Json | null
+          session_data?: Json
+          session_metadata?: Json | null
+          session_name: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delivery_type?: string
+          id?: string
+          project_id?: string | null
+          results?: Json | null
+          session_data?: Json
+          session_metadata?: Json | null
+          session_name?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_delivery_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_discovery_sessions: {
+        Row: {
+          business_canvas_data: Json | null
+          created_at: string
+          current_stage: string
+          export_history: Json | null
+          generated_backlog: Json | null
+          id: string
+          inception_data: Json | null
+          pbb_data: Json | null
+          project_id: string | null
+          session_metadata: Json | null
+          session_name: string
+          sprint0_data: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_canvas_data?: Json | null
+          created_at?: string
+          current_stage?: string
+          export_history?: Json | null
+          generated_backlog?: Json | null
+          id?: string
+          inception_data?: Json | null
+          pbb_data?: Json | null
+          project_id?: string | null
+          session_metadata?: Json | null
+          session_name: string
+          sprint0_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_canvas_data?: Json | null
+          created_at?: string
+          current_stage?: string
+          export_history?: Json | null
+          generated_backlog?: Json | null
+          id?: string
+          inception_data?: Json | null
+          pbb_data?: Json | null
+          project_id?: string | null
+          session_metadata?: Json | null
+          session_name?: string
+          sprint0_data?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_discovery_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      smart_hub_uploads: {
+        Row: {
+          ai_analysis: Json | null
+          created_at: string
+          file_name: string
+          file_path: string
+          file_size: number
+          file_type: string
+          id: string
+          processing_status: string | null
+          session_id: string
+          session_type: string
+          stage_name: string
+          transcription: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_size?: number
+          file_type: string
+          id?: string
+          processing_status?: string | null
+          session_id: string
+          session_type: string
+          stage_name: string
+          transcription?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          file_type?: string
+          id?: string
+          processing_status?: string | null
+          session_id?: string
+          session_type?: string
+          stage_name?: string
+          transcription?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       team_members: {
         Row: {
           allocation: number | null
