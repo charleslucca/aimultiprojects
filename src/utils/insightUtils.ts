@@ -7,6 +7,14 @@ export interface CriticalAlert {
   description: string;
   icon: string;
   actionRequired: boolean;
+  relatedIssues?: Array<{
+    jira_key: string;
+    id: string;
+    summary: string;
+    status: string;
+    priority: string;
+    assignee_name?: string;
+  }>;
 }
 
 export interface InsightSummary {
@@ -16,8 +24,8 @@ export interface InsightSummary {
   category: string;
 }
 
-// Extract critical alerts from insight data
-export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
+// Extract critical alerts from insight data with issue traceability
+export const extractCriticalAlerts = (insight: any, allIssues: any[] = []): CriticalAlert[] => {
   const alerts: CriticalAlert[] = [];
   const data = insight.insight_data || {};
   const type = insight.insight_type;
@@ -55,13 +63,26 @@ export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
     if (data.team_members && Array.isArray(data.team_members)) {
       data.team_members.forEach((member: any) => {
         if (member.completion_rate === 0 || member.performance_score < 0.3) {
+          // Find issues assigned to this team member
+          const memberIssues = allIssues.filter(issue => 
+            issue.assignee_name && issue.assignee_name.toLowerCase().includes(member.name.toLowerCase())
+          ).slice(0, 3);
+
           alerts.push({
             type: 'HR',
             severity: 'CRITICAL',
             title: `🔥 ${member.name}: Performance Crítica`,
             description: `${member.name} com ${(member.completion_rate || 0) * 100}% de conclusão - Suporte urgente necessário`,
             icon: 'UserX',
-            actionRequired: true
+            actionRequired: true,
+            relatedIssues: memberIssues.map(issue => ({
+              jira_key: issue.jira_key,
+              id: issue.id,
+              summary: issue.summary,
+              status: issue.status,
+              priority: issue.priority,
+              assignee_name: issue.assignee_name
+            }))
           });
         }
       });
@@ -101,13 +122,24 @@ export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
   // SLA Critical Alerts
   if (type === 'sla_risk' || type === 'sprint_prediction') {
     if (insight.confidence_score > 0.7 && type === 'sla_risk') {
+      // Find the specific issue if insight is related to one
+      const relatedIssue = insight.issue_id ? allIssues.find(i => i.id === insight.issue_id) : null;
+      
       alerts.push({
         type: 'SLA',
         severity: 'CRITICAL',
         title: '🔥 Alto Risco de SLA',
         description: `${Math.round(insight.confidence_score * 100)}% de risco de quebra de SLA`,
         icon: 'Clock',
-        actionRequired: true
+        actionRequired: true,
+        relatedIssues: relatedIssue ? [{
+          jira_key: relatedIssue.jira_key,
+          id: relatedIssue.id,
+          summary: relatedIssue.summary,
+          status: relatedIssue.status,
+          priority: relatedIssue.priority,
+          assignee_name: relatedIssue.assignee_name
+        }] : []
       });
     }
 
@@ -117,22 +149,50 @@ export const extractCriticalAlerts = (insight: any): CriticalAlert[] => {
       const issueText = typeof issue === 'string' ? issue : String(issue || '');
       
       if (issueText.toLowerCase().includes('sem assignee') || issueText.toLowerCase().includes('sem responsável')) {
+        // Find unassigned issues
+        const unassignedIssues = allIssues.filter(issue => !issue.assignee_name).slice(0, 5);
+        
         alerts.push({
           type: 'SLA',
           severity: 'HIGH',
           title: '⚠️ Issues sem Responsável',
           description: issueText,
           icon: 'UserMinus',
-          actionRequired: true
+          actionRequired: true,
+          relatedIssues: unassignedIssues.map(issue => ({
+            jira_key: issue.jira_key,
+            id: issue.id,
+            summary: issue.summary,
+            status: issue.status,
+            priority: issue.priority,
+            assignee_name: issue.assignee_name
+          }))
         });
       } else if (issueText.toLowerCase().includes('excesso') && issueText.toLowerCase().includes('doing')) {
+        // Find issues in "In Progress" or "Doing" status
+        const inProgressIssues = allIssues.filter(issue => 
+          issue.status && (
+            issue.status.toLowerCase().includes('progress') || 
+            issue.status.toLowerCase().includes('doing') ||
+            issue.status.toLowerCase().includes('desenvolvimento')
+          )
+        ).slice(0, 5);
+        
         alerts.push({
           type: 'SLA',
           severity: 'HIGH',
           title: '⚠️ Gargalo no Workflow',
           description: issueText,
           icon: 'BarChart3',
-          actionRequired: true
+          actionRequired: true,
+          relatedIssues: inProgressIssues.map(issue => ({
+            jira_key: issue.jira_key,
+            id: issue.id,
+            summary: issue.summary,
+            status: issue.status,
+            priority: issue.priority,
+            assignee_name: issue.assignee_name
+          }))
         });
       }
     });
@@ -229,8 +289,8 @@ export const extractArrayFromField = (field: any): string[] => {
 };
 
 // Process insight to add enhanced metadata
-export const processInsightForDisplay = (insight: any): any => {
-  const alerts = extractCriticalAlerts(insight);
+export const processInsightForDisplay = (insight: any, allIssues: any[] = []): any => {
+  const alerts = extractCriticalAlerts(insight, allIssues);
   const executive_summary = generateExecutiveSummary(insight);
   const criticality_score = calculateCriticalityScore(insight);
   const alert_category = categorizeInsight(insight);

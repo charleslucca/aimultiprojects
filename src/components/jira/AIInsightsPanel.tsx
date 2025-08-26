@@ -48,7 +48,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
 
   // Memoized filtered and sorted insights with processing
   const filteredInsights = useMemo(() => {
-    let filtered = insights.map(processInsightForDisplay);
+    let filtered = insights.map(insight => processInsightForDisplay(insight, issues));
 
     // Filter by search term
     if (searchTerm) {
@@ -97,7 +97,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
   // Group insights by type for summary with processing
   const insightsByType = useMemo(() => {
     const groups: Record<string, any[]> = {};
-    const processedInsights = insights.map(processInsightForDisplay);
+    const processedInsights = insights.map(insight => processInsightForDisplay(insight, issues));
     
     processedInsights.forEach((insight) => {
       const type = insight.insight_type;
@@ -107,7 +107,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
       groups[type].push(insight);
     });
     return groups;
-  }, [insights]);
+  }, [insights, issues]);
 
   // Critical insights for dashboard
   const criticalInsights = useMemo(() => {
@@ -237,71 +237,6 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
         </CardHeader>
       </Card>
 
-      {/* Critical Alerts Dashboard */}
-      {criticalInsights.length > 0 && (
-        <Card className="border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-400">
-              <Flame className="h-5 w-5" />
-              Alertas Críticos ({criticalInsights.length})
-            </CardTitle>
-            <CardDescription>
-              Situações que requerem ação imediata
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {criticalInsights.slice(0, 3).map((insight) => {
-                const criticalAlerts = insight.critical_alerts?.filter((a: CriticalAlert) => a.severity === 'CRITICAL') || [];
-                
-                return criticalAlerts.map((alert: CriticalAlert, index: number) => (
-                  <div 
-                    key={`${insight.id}-${index}`}
-                    className="p-3 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                    onClick={() => setSelectedInsight(insight)}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0">
-                        {alert.icon === 'AlertTriangle' && <AlertTriangle className="h-5 w-5 text-red-500" />}
-                        {alert.icon === 'UserX' && <UserX className="h-5 w-5 text-red-500" />}
-                        {alert.icon === 'DollarSign' && <DollarSign className="h-5 w-5 text-red-500" />}
-                        {alert.icon === 'Clock' && <Clock className="h-5 w-5 text-red-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="destructive" className="text-xs">
-                            {alert.type}
-                          </Badge>
-                          <Badge variant="destructive" className="text-xs">
-                            CRÍTICO
-                          </Badge>
-                        </div>
-                        <h4 className="font-semibold text-sm text-red-800 dark:text-red-300 mb-1">
-                          {alert.title}
-                        </h4>
-                        <p className="text-sm text-red-700 dark:text-red-400 line-clamp-2">
-                          {alert.description}
-                        </p>
-                      </div>
-                      <Button variant="ghost" size="sm" className="flex-shrink-0">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ));
-              })}
-            </div>
-            {criticalInsights.length > 3 && (
-              <div className="mt-3 text-center">
-                <Button variant="outline" size="sm" onClick={() => setSortBy('criticality')}>
-                  Ver todos os {criticalInsights.length} alertas críticos
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Enhanced Summary Cards by Type */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Object.entries(insightsByType).map(([type, typeInsights]) => {
@@ -310,6 +245,9 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
           const criticalCount = typeInsights.filter(insight => 
             insight.critical_alerts?.some((alert: CriticalAlert) => alert.severity === 'CRITICAL')
           ).length;
+          const criticalAlerts = typeInsights.flatMap(insight => 
+            insight.critical_alerts?.filter((alert: CriticalAlert) => alert.severity === 'CRITICAL') || []
+          );
           
           return (
             <Card 
@@ -349,8 +287,31 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
                     </span>
                   </div>
                   {criticalCount > 0 && (
-                    <div className="text-xs text-red-600 dark:text-red-400 font-medium">
-                      ⚠️ {criticalCount} alerta(s) crítico(s) requer(em) ação imediata
+                    <div className="space-y-2">
+                      <div className="text-xs text-red-600 dark:text-red-400 font-medium">
+                        ⚠️ {criticalCount} alerta(s) crítico(s) requer(em) ação imediata
+                      </div>
+                      {criticalAlerts.slice(0, 2).map((alert: CriticalAlert, index: number) => (
+                        <div key={index} className="p-2 bg-red-100 dark:bg-red-950/50 rounded text-xs">
+                          <div className="font-medium text-red-800 dark:text-red-300">
+                            {alert.title}
+                          </div>
+                          {alert.relatedIssues && alert.relatedIssues.length > 0 && (
+                            <div className="mt-1 space-x-1">
+                              {alert.relatedIssues.slice(0, 3).map((issue, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs h-5">
+                                  {issue.jira_key}
+                                </Badge>
+                              ))}
+                              {alert.relatedIssues.length > 3 && (
+                                <Badge variant="outline" className="text-xs h-5">
+                                  +{alert.relatedIssues.length - 3}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                   <div className="text-xs text-muted-foreground">
