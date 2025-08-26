@@ -15,6 +15,9 @@ import Team from "./pages/Team";
 import Academy from "./pages/Academy";
 import JiraCockpit from "./pages/JiraCockpit";
 import JiraCockpitProject from "./pages/JiraCockpitProject";
+import SmartHub from "./pages/SmartHub";
+import SmartDiscovery from "./pages/SmartDiscovery";
+import SmartDelivery from "./pages/SmartDelivery";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -50,6 +53,11 @@ const App: React.FC = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/team" element={<Team />} />
               <Route path="/academy" element={<Academy />} />
+              <Route path="/smart-hub" element={<SmartHub />} />
+              <Route path="/smart-hub/discovery" element={<SmartDiscovery />} />
+              <Route path="/smart-hub/discovery/:sessionId" element={<SmartDiscovery />} />
+              <Route path="/smart-hub/delivery" element={<SmartDelivery />} />
+              <Route path="/smart-hub/delivery/:sessionId" element={<SmartDelivery />} />
               <Route path="/settings" element={<Settings />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />

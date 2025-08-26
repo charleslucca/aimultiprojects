@@ -23,7 +23,8 @@ import {
   Bell,
   LogOut,
   BookOpen,
-  BarChart3
+  BarChart3,
+  Lightbulb
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -39,6 +40,11 @@ const navigationItems = [
     title: "Projetos",
     url: "/projects",
     icon: FolderOpen,
+  },
+  {
+    title: "Smart Hub",
+    url: "/smart-hub",
+    icon: Lightbulb,
   },
 ];
 
