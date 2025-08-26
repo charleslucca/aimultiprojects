@@ -15,12 +15,21 @@ import {
   BarChart3,
   Users,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Trash2,
+  MoreVertical
 } from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
 import { NewProjectModal } from "@/components/modals/NewProjectModal";
+import { DeleteConfirmationModal } from "@/components/modals/DeleteConfirmationModal";
 // Fixed import for JiraConfigModal (default export)
 import JiraConfigModal from "@/components/jira/JiraConfigModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Client {
   id: string;
@@ -54,6 +63,11 @@ export default function Projects() {
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
   const [jiraModalOpen, setJiraModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [deleteClientModal, setDeleteClientModal] = useState<{ isOpen: boolean; client: Client | null }>({
+    isOpen: false,
+    client: null
+  });
+  const [isDeletingClient, setIsDeletingClient] = useState(false);
   
   const [searchParams] = useSearchParams();
   const selectedClientId = searchParams.get('client');
@@ -195,6 +209,37 @@ export default function Projects() {
   const handleConnectJira = (projectId: string) => {
     setSelectedProject(projectId);
     setJiraModalOpen(true);
+  };
+
+  const handleDeleteClient = async () => {
+    if (!deleteClientModal.client) return;
+
+    setIsDeletingClient(true);
+    try {
+      const { error } = await supabase
+        .from('clients')
+        .delete()
+        .eq('id', deleteClientModal.client.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Cliente excluído",
+        description: `O cliente "${deleteClientModal.client.name}" e todos os seus projetos foram excluídos com sucesso.`,
+      });
+
+      // Reload data to reflect changes
+      loadData();
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir cliente",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingClient(false);
+      setDeleteClientModal({ isOpen: false, client: null });
+    }
   };
 
   const getClientProjects = (clientId: string) => {
@@ -365,6 +410,29 @@ export default function Projects() {
                     <Badge variant="outline">
                       {clientProjects.length} projeto{clientProjects.length !== 1 ? 's' : ''}
                     </Badge>
+                    
+                    {/* Only show delete option for real clients, not orphaned projects */}
+                    {client.id !== 'orphaned' && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteClientModal({ isOpen: true, client });
+                            }}
+                            className="text-red-600 focus:text-red-600"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Excluir Cliente
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -441,6 +509,16 @@ export default function Projects() {
           setSelectedProject(null);
         }}
         onSave={loadData}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={deleteClientModal.isOpen}
+        onClose={() => setDeleteClientModal({ isOpen: false, client: null })}
+        onConfirm={handleDeleteClient}
+        title="Excluir Cliente"
+        description="Tem certeza de que deseja excluir este cliente? Todos os projetos associados também serão excluídos."
+        itemName={deleteClientModal.client?.name || ""}
+        isLoading={isDeletingClient}
       />
     </div>
   );
