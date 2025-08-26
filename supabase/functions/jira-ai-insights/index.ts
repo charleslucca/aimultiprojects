@@ -142,7 +142,6 @@ serve(async (req) => {
   }
 });
 
-// Helper function to map project_id to jira_project_id
 // Helper function to load custom prompts from project intelligence profiles
 async function loadCustomPrompt(supabaseClient: any, jiraProjectId?: string, insightType?: string): Promise<string | null> {
   if (!jiraProjectId || !insightType) return null;
@@ -195,6 +194,9 @@ function generateTeamPerformanceExecutiveSummary(teamMembers: any[], analysis: a
   const avgCompletion = teamMembers.reduce((sum, m) => sum + m.completion_rate, 0) / teamMembers.length;
   return `Performance da equipe: ${Math.round(avgCompletion * 100)}% de conclusão média`;
 }
+
+// Helper function to map project_id to jira_project_id
+async function getJiraProjectId(supabaseClient: any, projectId?: string, configId?: string): Promise<string | null> {
   if (!projectId && !configId) {
     console.log('No project_id or config_id provided, returning null');
     return null;
