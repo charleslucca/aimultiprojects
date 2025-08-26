@@ -143,8 +143,11 @@ export type Database = {
       }
       jira_ai_insights: {
         Row: {
+          alert_category: string | null
           confidence_score: number | null
           created_at: string
+          criticality_score: number | null
+          executive_summary: string | null
           expires_at: string | null
           generated_at: string | null
           id: string
@@ -154,8 +157,11 @@ export type Database = {
           project_id: string | null
         }
         Insert: {
+          alert_category?: string | null
           confidence_score?: number | null
           created_at?: string
+          criticality_score?: number | null
+          executive_summary?: string | null
           expires_at?: string | null
           generated_at?: string | null
           id?: string
@@ -165,8 +171,11 @@ export type Database = {
           project_id?: string | null
         }
         Update: {
+          alert_category?: string | null
           confidence_score?: number | null
           created_at?: string
+          criticality_score?: number | null
+          executive_summary?: string | null
           expires_at?: string | null
           generated_at?: string | null
           id?: string
@@ -680,6 +689,7 @@ export type Database = {
           id: string
           methodology: string | null
           project_id: string | null
+          prompt_templates: Json | null
           story_points_to_hours: number | null
           success_metrics: Json | null
           updated_at: string
@@ -692,6 +702,7 @@ export type Database = {
           id?: string
           methodology?: string | null
           project_id?: string | null
+          prompt_templates?: Json | null
           story_points_to_hours?: number | null
           success_metrics?: Json | null
           updated_at?: string
@@ -704,6 +715,7 @@ export type Database = {
           id?: string
           methodology?: string | null
           project_id?: string | null
+          prompt_templates?: Json | null
           story_points_to_hours?: number | null
           success_metrics?: Json | null
           updated_at?: string

@@ -210,19 +210,33 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {Array.isArray(insightData.recommendations) ? (
-                    <div className="space-y-3">
-                      {insightData.recommendations.map((rec: string, index: number) => (
-                        <div key={index} className="p-3 bg-primary/5 border-l-4 border-primary rounded-r-lg">
-                          <p className="text-muted-foreground">{rec}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-primary/5 border-l-4 border-primary rounded-r-lg">
-                      <p className="text-muted-foreground">{insightData.recommendations}</p>
-                    </div>
-                  )}
+                  {(() => {
+                    // Handle different recommendation formats
+                    let recommendations = [];
+                    
+                    if (Array.isArray(insightData.recommendations)) {
+                      recommendations = insightData.recommendations;
+                    } else if (typeof insightData.recommendations === 'object' && insightData.recommendations !== null) {
+                      // Handle object format like {recommendation_1, recommendation_2, recommendation_3}
+                      recommendations = Object.values(insightData.recommendations).filter(Boolean);
+                    } else if (typeof insightData.recommendations === 'string') {
+                      recommendations = [insightData.recommendations];
+                    }
+                    
+                    return recommendations.length > 0 ? (
+                      <div className="space-y-3">
+                        {recommendations.map((rec: string, index: number) => (
+                          <div key={index} className="p-3 bg-primary/5 border-l-4 border-primary rounded-r-lg">
+                            <p className="text-muted-foreground">{rec}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-muted/5 border-l-4 border-muted rounded-r-lg">
+                        <p className="text-muted-foreground">Nenhuma recomendação disponível</p>
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             )}
@@ -237,21 +251,33 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {Array.isArray(insightData.risk_factors) ? (
-                    <div className="space-y-2">
-                      {insightData.risk_factors.map((risk: string, index: number) => (
-                        <div key={index} className="flex items-start gap-2 p-2 bg-warning/5 rounded">
-                          <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
-                          <span className="text-muted-foreground">{risk}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2 p-2 bg-warning/5 rounded">
-                      <AlertTriangle className="h-4 w-4 text-warning mt-0.5" />
-                      <span className="text-muted-foreground">{insightData.risk_factors}</span>
-                    </div>
-                  )}
+                  {(() => {
+                    let riskFactors = [];
+                    
+                    if (Array.isArray(insightData.risk_factors)) {
+                      riskFactors = insightData.risk_factors;
+                    } else if (typeof insightData.risk_factors === 'object' && insightData.risk_factors !== null) {
+                      riskFactors = Object.values(insightData.risk_factors).filter(Boolean);
+                    } else if (typeof insightData.risk_factors === 'string') {
+                      riskFactors = [insightData.risk_factors];
+                    }
+                    
+                    return riskFactors.length > 0 ? (
+                      <div className="space-y-2">
+                        {riskFactors.map((risk: string, index: number) => (
+                          <div key={index} className="flex items-start gap-2 p-2 bg-warning/5 rounded">
+                            <AlertTriangle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                            <span className="text-muted-foreground">{risk}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 p-2 bg-muted/5 rounded">
+                        <AlertTriangle className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
+                        <span className="text-muted-foreground">Nenhum fator de risco identificado</span>
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             )}
@@ -266,21 +292,33 @@ const InsightDetailModal: React.FC<InsightDetailModalProps> = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {Array.isArray(insightData.action_items) ? (
-                    <div className="space-y-2">
-                      {insightData.action_items.map((action: string, index: number) => (
-                        <div key={index} className="flex items-start gap-2 p-2 bg-success/5 rounded">
-                          <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                          <span className="text-muted-foreground">{action}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2 p-2 bg-success/5 rounded">
-                      <CheckCircle2 className="h-4 w-4 text-success mt-0.5" />
-                      <span className="text-muted-foreground">{insightData.action_items}</span>
-                    </div>
-                  )}
+                  {(() => {
+                    let actionItems = [];
+                    
+                    if (Array.isArray(insightData.action_items)) {
+                      actionItems = insightData.action_items;
+                    } else if (typeof insightData.action_items === 'object' && insightData.action_items !== null) {
+                      actionItems = Object.values(insightData.action_items).filter(Boolean);
+                    } else if (typeof insightData.action_items === 'string') {
+                      actionItems = [insightData.action_items];
+                    }
+                    
+                    return actionItems.length > 0 ? (
+                      <div className="space-y-2">
+                        {actionItems.map((action: string, index: number) => (
+                          <div key={index} className="flex items-start gap-2 p-2 bg-success/5 rounded">
+                            <CheckCircle2 className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
+                            <span className="text-muted-foreground">{action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-start gap-2 p-2 bg-muted/5 rounded">
+                        <CheckCircle2 className="h-4 w-4 text-muted mt-0.5 flex-shrink-0" />
+                        <span className="text-muted-foreground">Nenhuma ação específica recomendada</span>
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             )}

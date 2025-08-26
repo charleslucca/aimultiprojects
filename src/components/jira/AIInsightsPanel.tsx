@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import InsightDetailModal from './InsightDetailModal';
+import { processInsightForDisplay, extractCriticalAlerts, type CriticalAlert } from '@/utils/insightUtils';
 import { 
   AlertTriangle, 
   TrendingUp, 
@@ -23,7 +24,10 @@ import {
   Filter,
   BarChart3,
   Eye,
-  Calendar
+  Calendar,
+  Flame,
+  UserX,
+  UserMinus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,9 +46,9 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('date');
 
-  // Memoized filtered and sorted insights
+  // Memoized filtered and sorted insights with processing
   const filteredInsights = useMemo(() => {
-    let filtered = insights;
+    let filtered = insights.map(processInsightForDisplay);
 
     // Filter by search term
     if (searchTerm) {
@@ -52,7 +56,10 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
         const insightText = JSON.stringify(insight.insight_data).toLowerCase();
         const relatedIssue = issues.find(i => i.id === insight.issue_id);
         const issueText = relatedIssue ? `${relatedIssue.jira_key} ${relatedIssue.summary}`.toLowerCase() : '';
-        return insightText.includes(searchTerm.toLowerCase()) || issueText.includes(searchTerm.toLowerCase());
+        const alertText = insight.critical_alerts?.map((a: CriticalAlert) => `${a.title} ${a.description}`).join(' ').toLowerCase() || '';
+        return insightText.includes(searchTerm.toLowerCase()) || 
+               issueText.includes(searchTerm.toLowerCase()) ||
+               alertText.includes(searchTerm.toLowerCase());
       });
     }
 
@@ -61,15 +68,25 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
       filtered = filtered.filter(insight => insight.insight_type === selectedType);
     }
 
-    // Sort insights
+    // Sort insights (prioritize critical alerts)
     filtered.sort((a, b) => {
       switch (sortBy) {
+        case 'criticality':
+          return (b.criticality_score || 0) - (a.criticality_score || 0);
         case 'confidence':
           return (b.confidence_score || 0) - (a.confidence_score || 0);
         case 'type':
           return a.insight_type.localeCompare(b.insight_type);
         case 'date':
         default:
+          // Sort by criticality first, then by date
+          const aCritical = a.critical_alerts?.some((alert: CriticalAlert) => alert.severity === 'CRITICAL') ? 1 : 0;
+          const bCritical = b.critical_alerts?.some((alert: CriticalAlert) => alert.severity === 'CRITICAL') ? 1 : 0;
+          
+          if (aCritical !== bCritical) {
+            return bCritical - aCritical; // Critical first
+          }
+          
           return new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime();
       }
     });
@@ -77,10 +94,12 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
     return filtered;
   }, [insights, issues, searchTerm, selectedType, sortBy]);
 
-  // Group insights by type for summary
+  // Group insights by type for summary with processing
   const insightsByType = useMemo(() => {
     const groups: Record<string, any[]> = {};
-    insights.forEach((insight) => {
+    const processedInsights = insights.map(processInsightForDisplay);
+    
+    processedInsights.forEach((insight) => {
       const type = insight.insight_type;
       if (!groups[type]) {
         groups[type] = [];
@@ -89,6 +108,13 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
     });
     return groups;
   }, [insights]);
+
+  // Critical insights for dashboard
+  const criticalInsights = useMemo(() => {
+    return filteredInsights.filter(insight => 
+      insight.critical_alerts?.some((alert: CriticalAlert) => alert.severity === 'CRITICAL')
+    );
+  }, [filteredInsights]);
 
   // Get unique insight types for filter
   const insightTypes = useMemo(() => {
@@ -211,21 +237,107 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
         </CardHeader>
       </Card>
 
-      {/* Summary Cards by Type */}
+      {/* Critical Alerts Dashboard */}
+      {criticalInsights.length > 0 && (
+        <Card className="border-red-200 bg-red-50/50 dark:border-red-800 dark:bg-red-950/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-700 dark:text-red-400">
+              <Flame className="h-5 w-5" />
+              Alertas Críticos ({criticalInsights.length})
+            </CardTitle>
+            <CardDescription>
+              Situações que requerem ação imediata
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {criticalInsights.slice(0, 3).map((insight) => {
+                const criticalAlerts = insight.critical_alerts?.filter((a: CriticalAlert) => a.severity === 'CRITICAL') || [];
+                
+                return criticalAlerts.map((alert: CriticalAlert, index: number) => (
+                  <div 
+                    key={`${insight.id}-${index}`}
+                    className="p-3 bg-white dark:bg-gray-900 border border-red-200 dark:border-red-800 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                    onClick={() => setSelectedInsight(insight)}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        {alert.icon === 'AlertTriangle' && <AlertTriangle className="h-5 w-5 text-red-500" />}
+                        {alert.icon === 'UserX' && <UserX className="h-5 w-5 text-red-500" />}
+                        {alert.icon === 'DollarSign' && <DollarSign className="h-5 w-5 text-red-500" />}
+                        {alert.icon === 'Clock' && <Clock className="h-5 w-5 text-red-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="destructive" className="text-xs">
+                            {alert.type}
+                          </Badge>
+                          <Badge variant="destructive" className="text-xs">
+                            CRÍTICO
+                          </Badge>
+                        </div>
+                        <h4 className="font-semibold text-sm text-red-800 dark:text-red-300 mb-1">
+                          {alert.title}
+                        </h4>
+                        <p className="text-sm text-red-700 dark:text-red-400 line-clamp-2">
+                          {alert.description}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="flex-shrink-0">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ));
+              })}
+            </div>
+            {criticalInsights.length > 3 && (
+              <div className="mt-3 text-center">
+                <Button variant="outline" size="sm" onClick={() => setSortBy('criticality')}>
+                  Ver todos os {criticalInsights.length} alertas críticos
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Enhanced Summary Cards by Type */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {Object.entries(insightsByType).map(([type, typeInsights]) => {
           const IconComponent = getInsightIcon(type);
           const averageConfidence = typeInsights.reduce((sum, insight) => sum + (insight.confidence_score || 0), 0) / typeInsights.length;
+          const criticalCount = typeInsights.filter(insight => 
+            insight.critical_alerts?.some((alert: CriticalAlert) => alert.severity === 'CRITICAL')
+          ).length;
           
           return (
-            <Card key={type} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedType(type)}>
+            <Card 
+              key={type} 
+              className={cn(
+                "hover:shadow-md transition-shadow cursor-pointer",
+                criticalCount > 0 && "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-950/10"
+              )}
+              onClick={() => setSelectedType(type)}
+            >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <IconComponent className="h-5 w-5 text-primary" />
+                    <IconComponent className={cn(
+                      "h-5 w-5",
+                      criticalCount > 0 ? "text-red-500" : "text-primary"
+                    )} />
                     <CardTitle className="text-base">{formatInsightType(type)}</CardTitle>
                   </div>
-                  <Badge variant="secondary">{typeInsights.length}</Badge>
+                  <div className="flex items-center gap-1">
+                    <Badge variant="secondary">{typeInsights.length}</Badge>
+                    {criticalCount > 0 && (
+                      <Badge variant="destructive" className="text-xs">
+                        <Flame className="h-3 w-3 mr-1" />
+                        {criticalCount}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -236,6 +348,11 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
                       {Math.round(averageConfidence * 100)}%
                     </span>
                   </div>
+                  {criticalCount > 0 && (
+                    <div className="text-xs text-red-600 dark:text-red-400 font-medium">
+                      ⚠️ {criticalCount} alerta(s) crítico(s) requer(em) ação imediata
+                    </div>
+                  )}
                   <div className="text-xs text-muted-foreground">
                     Último: {new Date(Math.max(...typeInsights.map(i => new Date(i.generated_at).getTime()))).toLocaleDateString('pt-BR')}
                   </div>
@@ -281,6 +398,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="date">Por data</SelectItem>
+                  <SelectItem value="criticality">Por criticidade</SelectItem>
                   <SelectItem value="confidence">Por confiabilidade</SelectItem>
                   <SelectItem value="type">Por tipo</SelectItem>
                 </SelectContent>
@@ -305,18 +423,26 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
                 const IconComponent = getInsightIcon(insight.insight_type);
                 const issue = insight.issue_id ? issues.find(i => i.id === insight.issue_id) : null;
                 const insightData = insight.insight_data || {};
+                const criticalAlerts = insight.critical_alerts?.filter((a: CriticalAlert) => a.severity === 'CRITICAL') || [];
+                const hasCritical = criticalAlerts.length > 0;
 
                 return (
                   <div 
                     key={insight.id} 
-                    className="p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                    className={cn(
+                      "p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors",
+                      hasCritical && "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-950/10"
+                    )}
                     onClick={() => setSelectedInsight(insight)}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-start gap-3 flex-1">
-                        <IconComponent className="h-5 w-5 text-primary mt-1 flex-shrink-0" />
+                        <IconComponent className={cn(
+                          "h-5 w-5 mt-1 flex-shrink-0",
+                          hasCritical ? "text-red-500" : "text-primary"
+                        )} />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
                             <Badge variant="outline">
                               {formatInsightType(insight.insight_type)}
                             </Badge>
@@ -326,11 +452,37 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
                             >
                               {Math.round(insight.confidence_score * 100)}%
                             </Badge>
+                            {hasCritical && (
+                              <Badge variant="destructive" className="text-xs">
+                                <Flame className="h-3 w-3 mr-1" />
+                                CRÍTICO
+                              </Badge>
+                            )}
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Calendar className="h-3 w-3" />
                               {new Date(insight.generated_at).toLocaleDateString('pt-BR')}
                             </div>
                           </div>
+                          
+                          {/* Critical Alerts Preview */}
+                          {criticalAlerts.length > 0 && (
+                            <div className="mb-3 p-2 bg-red-100 dark:bg-red-950/20 border-l-4 border-red-500 rounded-r">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Flame className="h-4 w-4 text-red-600" />
+                                <span className="text-sm font-semibold text-red-800 dark:text-red-300">
+                                  Ação Crítica Necessária
+                                </span>
+                              </div>
+                              <p className="text-sm text-red-700 dark:text-red-400 line-clamp-2">
+                                {criticalAlerts[0].description}
+                              </p>
+                              {criticalAlerts.length > 1 && (
+                                <p className="text-xs text-red-600 dark:text-red-500 mt-1">
+                                  +{criticalAlerts.length - 1} outro(s) alerta(s) crítico(s)
+                                </p>
+                              )}
+                            </div>
+                          )}
                           
                           {issue && (
                             <div className="mb-2">
@@ -341,7 +493,15 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
                             </div>
                           )}
                           
-                          {insightData.summary && (
+                          {/* Executive Summary */}
+                          {insight.executive_summary && (
+                            <p className="text-muted-foreground text-sm line-clamp-2 mb-2 font-medium">
+                              {insight.executive_summary}
+                            </p>
+                          )}
+                          
+                          {/* Fallback to regular summary */}
+                          {!insight.executive_summary && insightData.summary && (
                             <p className="text-muted-foreground text-sm line-clamp-2 mb-2">
                               {insightData.summary}
                             </p>

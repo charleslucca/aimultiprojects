@@ -143,7 +143,58 @@ serve(async (req) => {
 });
 
 // Helper function to map project_id to jira_project_id
-async function getJiraProjectId(supabaseClient: any, projectId?: string, configId?: string): Promise<string | null> {
+// Helper function to load custom prompts from project intelligence profiles
+async function loadCustomPrompt(supabaseClient: any, jiraProjectId?: string, insightType?: string): Promise<string | null> {
+  if (!jiraProjectId || !insightType) return null;
+
+  try {
+    const { data: profiles, error } = await supabaseClient
+      .from('project_intelligence_profiles')
+      .select('prompt_templates')
+      .eq('project_id', jiraProjectId)
+      .limit(1);
+
+    if (error || !profiles || profiles.length === 0) {
+      console.log('No custom prompts found, using defaults');
+      return null;
+    }
+
+    const promptTemplates = profiles[0].prompt_templates;
+    return promptTemplates?.[insightType] || null;
+  } catch (error) {
+    console.error('Error loading custom prompt:', error);
+    return null;
+  }
+}
+
+// Helper function to ensure field is an array
+function ensureArray(field: any): string[] {
+  if (!field) return [];
+  if (Array.isArray(field)) return field.filter(Boolean);
+  if (typeof field === 'object' && field !== null) {
+    return Object.values(field).filter(Boolean) as string[];
+  }
+  if (typeof field === 'string') return [field];
+  return [];
+}
+
+// Generate executive summary for team performance
+function generateTeamPerformanceExecutiveSummary(teamMembers: any[], analysis: any): string {
+  const criticalMembers = teamMembers.filter(m => m.completion_rate === 0);
+  const lowPerformers = teamMembers.filter(m => m.performance_score < 0.3);
+  
+  if (criticalMembers.length > 0) {
+    const memberNames = criticalMembers.map(m => m.name).join(', ');
+    return `🔥 CRÍTICO: ${memberNames} com 0% de conclusão - Ação urgente necessária`;
+  }
+  
+  if (lowPerformers.length > 0) {
+    return `⚠️ ${lowPerformers.length} membro(s) com performance baixa requer(em) suporte`;
+  }
+  
+  const avgCompletion = teamMembers.reduce((sum, m) => sum + m.completion_rate, 0) / teamMembers.length;
+  return `Performance da equipe: ${Math.round(avgCompletion * 100)}% de conclusão média`;
+}
   if (!projectId && !configId) {
     console.log('No project_id or config_id provided, returning null');
     return null;
