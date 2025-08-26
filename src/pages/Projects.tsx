@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
 import { NewProjectModal } from "@/components/modals/NewProjectModal";
+// Fixed import for JiraConfigModal (default export)
 import JiraConfigModal from "@/components/jira/JiraConfigModal";
 
 interface Client {

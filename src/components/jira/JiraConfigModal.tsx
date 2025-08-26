@@ -334,4 +334,5 @@ const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
   );
 };
 
+// JiraConfigModal component for managing Jira configurations
 export default JiraConfigModal;
