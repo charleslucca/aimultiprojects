@@ -21,13 +21,15 @@ interface JiraConfigModalProps {
   onClose: () => void;
   onSave: () => void;
   selectedConfig?: any;
+  clientId?: string;
 }
 
 const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  selectedConfig
+  selectedConfig,
+  clientId
 }) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -141,6 +143,7 @@ const JiraConfigModal: React.FC<JiraConfigModalProps> = ({
         api_token_encrypted: formData.api_token, // In production, this should be encrypted
         project_keys: projectKeysArray,
         sync_enabled: formData.sync_enabled,
+        client_id: clientId || null,
       };
 
       let result;

@@ -207,6 +207,7 @@ export default function Projects() {
   };
 
   const handleConnectJira = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
     setSelectedProject(projectId);
     setJiraModalOpen(true);
   };
@@ -328,7 +329,12 @@ export default function Projects() {
             setJiraModalOpen(false);
             setSelectedProject(null);
           }}
-          onSave={loadData}
+          onSave={async () => {
+            await loadData();
+            setJiraModalOpen(false);
+            setSelectedProject(null);
+          }}
+          clientId={selectedProject ? projects.find(p => p.id === selectedProject)?.client_id : undefined}
         />
       </div>
     );
@@ -508,7 +514,12 @@ export default function Projects() {
           setJiraModalOpen(false);
           setSelectedProject(null);
         }}
-        onSave={loadData}
+        onSave={async () => {
+          await loadData();
+          setJiraModalOpen(false);
+          setSelectedProject(null);
+        }}
+        clientId={selectedProject ? projects.find(p => p.id === selectedProject)?.client_id : undefined}
       />
 
       <DeleteConfirmationModal
