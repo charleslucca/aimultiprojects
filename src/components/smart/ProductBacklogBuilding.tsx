@@ -273,7 +273,7 @@ export function ProductBacklogBuilding({ data, onSave, sessionId }: ProductBackl
       sessionId={sessionId}
       sessionType="discovery"
       stageName={`pbb_${sectionId}`}
-      accept="audio/*,video/*,image/*,.pdf,.doc,.docx,.txt"
+      accept="audio/*,video/*,image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
       maxFiles={3}
       className="mt-2"
     />

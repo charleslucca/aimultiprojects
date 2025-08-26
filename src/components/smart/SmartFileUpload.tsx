@@ -55,7 +55,7 @@ export function SmartFileUpload({
   sessionType,
   stageName,
   onUploadComplete,
-  accept = "audio/*,video/*,image/*,text/*,.pdf,.doc,.docx,.txt,.md",
+  accept = "audio/*,video/*,image/*,text/plain,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   maxFiles = 5,
   maxSize = 50 * 1024 * 1024, // 50MB
   className
@@ -69,7 +69,12 @@ export function SmartFileUpload({
     if (!user) return null;
 
     const fileId = crypto.randomUUID();
-    const fileName = `${sessionType}/${sessionId}/${stageName}/${fileId}_${file.name}`;
+    // Sanitize filename to avoid invalid characters
+    const sanitizedName = file.name
+      .replace(/[^a-zA-Z0-9.\-_]/g, '_')
+      .replace(/_{2,}/g, '_')
+      .toLowerCase();
+    const fileName = `${sessionType}/${sessionId}/${stageName}/${fileId}_${sanitizedName}`;
 
     // Add to uploading state
     const uploadProgress: UploadProgress = {
@@ -122,8 +127,15 @@ export function SmartFileUpload({
       ));
 
       // Trigger AI processing for supported file types
+      const supportedTypes = [
+        'text/plain',
+        'application/pdf', 
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      
       if (file.type.startsWith('audio/') || file.type.startsWith('video/') || 
-          file.type === 'text/plain' || file.type === 'application/pdf') {
+          supportedTypes.includes(file.type)) {
         
         try {
           await supabase.functions.invoke('analyze-file', {
@@ -213,7 +225,8 @@ export function SmartFileUpload({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: accept.split(',').reduce((acc, type) => {
-      acc[type.trim()] = [];
+      const trimmedType = type.trim();
+      acc[trimmedType] = [];
       return acc;
     }, {} as Record<string, string[]>),
     maxFiles,

@@ -31,7 +31,7 @@ export function RiskAssessment({ data, results, onSave, sessionId }: RiskAssessm
       sessionId={sessionId}
       sessionType="delivery"
       stageName={`risk_${sectionId}`}
-      accept="audio/*,video/*,.pdf"
+      accept="audio/*,video/*,application/pdf"
       maxFiles={2}
       className="mt-2"
     />

@@ -38,7 +38,7 @@ export function SmartEstimation({ data, results, onSave, sessionId }: SmartEstim
       sessionId={sessionId}
       sessionType="delivery"
       stageName={`estimation_${sectionId}`}
-      accept="audio/*,video/*,.pdf,.doc,.docx"
+      accept="audio/*,video/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       maxFiles={2}
       className="mt-2"
     />

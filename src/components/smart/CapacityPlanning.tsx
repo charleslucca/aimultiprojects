@@ -30,7 +30,7 @@ export function CapacityPlanning({ data, results, onSave, sessionId }: CapacityP
       sessionId={sessionId}
       sessionType="delivery"
       stageName={`capacity_${sectionId}`}
-      accept="audio/*,video/*,.pdf"
+      accept="audio/*,video/*,application/pdf"
       maxFiles={2}
       className="mt-2"
     />
