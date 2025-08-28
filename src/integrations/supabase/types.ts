@@ -680,6 +680,60 @@ export type Database = {
           },
         ]
       }
+      project_integrations: {
+        Row: {
+          client_id: string | null
+          configuration: Json
+          created_at: string | null
+          id: string
+          integration_type: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          project_id: string
+          sync_enabled: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          configuration: Json
+          created_at?: string | null
+          id?: string
+          integration_type: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          project_id: string
+          sync_enabled?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          configuration?: Json
+          created_at?: string | null
+          id?: string
+          integration_type?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          project_id?: string
+          sync_enabled?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_integrations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_integrations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_intelligence_profiles: {
         Row: {
           average_hourly_rate: number | null
@@ -723,6 +777,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "project_intelligence_profiles_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_permissions: {
+        Row: {
+          expires_at: string | null
+          granted_at: string | null
+          granted_by: string | null
+          id: string
+          is_active: boolean | null
+          permission_type: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          expires_at?: string | null
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          permission_type: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          expires_at?: string | null
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          permission_type?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_permissions_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -1024,6 +1119,119 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unified_insights: {
+        Row: {
+          client_id: string | null
+          confidence_score: number | null
+          content: string
+          created_at: string | null
+          created_by: string | null
+          criticality_score: number | null
+          expires_at: string | null
+          id: string
+          insight_category: string | null
+          insight_type: string
+          metadata: Json | null
+          project_id: string | null
+          source_id: string | null
+          source_origin: string | null
+          source_type: string
+          title: string
+        }
+        Insert: {
+          client_id?: string | null
+          confidence_score?: number | null
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          criticality_score?: number | null
+          expires_at?: string | null
+          id?: string
+          insight_category?: string | null
+          insight_type: string
+          metadata?: Json | null
+          project_id?: string | null
+          source_id?: string | null
+          source_origin?: string | null
+          source_type: string
+          title: string
+        }
+        Update: {
+          client_id?: string | null
+          confidence_score?: number | null
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          criticality_score?: number | null
+          expires_at?: string | null
+          id?: string
+          insight_category?: string | null
+          insight_type?: string
+          metadata?: Json | null
+          project_id?: string | null
+          source_id?: string | null
+          source_origin?: string | null
+          source_type?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unified_insights_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unified_insights_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string
+          organization_id: string | null
+          role_in_organization: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          organization_id?: string | null
+          role_in_organization?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          organization_id?: string | null
+          role_in_organization?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
