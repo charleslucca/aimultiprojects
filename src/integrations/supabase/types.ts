@@ -1465,6 +1465,8 @@ export type Database = {
           discovery_name: string
           discovery_type: string | null
           export_history: Json | null
+          final_document: Json | null
+          finalized_at: string | null
           generated_backlog: Json | null
           id: string
           inception_data: Json | null
@@ -1475,6 +1477,7 @@ export type Database = {
           session_metadata: Json | null
           session_name: string
           sprint0_data: Json | null
+          stage_status: Json | null
           status: string
           updated_at: string
           user_id: string
@@ -1488,6 +1491,8 @@ export type Database = {
           discovery_name?: string
           discovery_type?: string | null
           export_history?: Json | null
+          final_document?: Json | null
+          finalized_at?: string | null
           generated_backlog?: Json | null
           id?: string
           inception_data?: Json | null
@@ -1498,6 +1503,7 @@ export type Database = {
           session_metadata?: Json | null
           session_name: string
           sprint0_data?: Json | null
+          stage_status?: Json | null
           status?: string
           updated_at?: string
           user_id: string
@@ -1511,6 +1517,8 @@ export type Database = {
           discovery_name?: string
           discovery_type?: string | null
           export_history?: Json | null
+          final_document?: Json | null
+          finalized_at?: string | null
           generated_backlog?: Json | null
           id?: string
           inception_data?: Json | null
@@ -1521,6 +1529,7 @@ export type Database = {
           session_metadata?: Json | null
           session_name?: string
           sprint0_data?: Json | null
+          stage_status?: Json | null
           status?: string
           updated_at?: string
           user_id?: string
@@ -1860,6 +1869,10 @@ export type Database = {
     Functions: {
       is_admin_user: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      validate_stage_completeness: {
+        Args: { session_data: Json; stage_name: string }
         Returns: boolean
       }
     }
