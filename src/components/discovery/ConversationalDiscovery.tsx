@@ -3,13 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Settings, FileText, Download, History, Mic, Users, Target, PlayCircle, Trash2, CheckCircle, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Settings, FileText, Download, History, Mic, Users, Target, PlayCircle, Trash2, CheckCircle, FileSpreadsheet, Volume2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ChatInterface } from './ChatInterface';
 import { DiscoveryWizard } from './DiscoveryWizard';
 import { FileUploadZone } from './FileUploadZone';
 import StageStatusManager from './StageStatusManager';
+import DiscoveryTimeline from './DiscoveryTimeline';
+import SmartSuggestions from './SmartSuggestions';
+import EnhancedTranscription from './EnhancedTranscription';
 import MeetingTranscriptionPlugin from '../transcription/MeetingTranscriptionPlugin';
 import { DiscoveryExporter } from '@/utils/discoveryExporter';
 
@@ -56,6 +59,9 @@ const ConversationalDiscovery: React.FC<ConversationalDiscoveryProps> = ({
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showTranscription, setShowTranscription] = useState(false);
+  const [showEnhancedTranscription, setShowEnhancedTranscription] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(true);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const [showVersions, setShowVersions] = useState(false);
   const [sessionVersions, setSessionVersions] = useState<any[]>([]);
   const { toast } = useToast();
@@ -524,6 +530,46 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
     }
   };
 
+  const handleSuggestionClick = async (action: string, data?: any) => {
+    console.log('Ação de sugestão:', action, data);
+    
+    switch (action) {
+      case 'ask_business_context':
+        const contextMessage: ChatMessage = {
+          role: 'assistant',
+          content: '🎯 **Vamos começar pelo Business Model Canvas!**\n\nPara criar um modelo de negócio sólido, preciso entender melhor seu projeto. Me conte:\n\n1. **Qual problema** seu produto/serviço resolve?\n2. **Para quem** é direcionado (público-alvo)?\n3. **Como** você pretende gerar receita?\n\nCom essas informações, posso gerar perguntas específicas para sua reunião de BMC! 🚀',
+          timestamp: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, contextMessage]);
+        break;
+        
+      case 'switch_to_inception':
+      case 'suggest_bmc_parallel':
+        const stage = action === 'switch_to_inception' ? 'inception' : 'business_canvas';
+        await handleStageSelect(stage);
+        break;
+        
+      case 'use_context_for_pbb':
+        const pbbMessage: ChatMessage = {
+          role: 'assistant',
+          content: '📋 **Excelente! Tenho contexto das etapas anteriores.**\n\nCom base no que já sabemos sobre o modelo de negócio e visão do produto, posso gerar um Product Backlog mais assertivo.\n\nVou usar:\n- Proposta de valor do BMC\n- Personas do Inception\n- Objetivos identificados\n\nMe conte mais sobre as **funcionalidades prioritárias** que você imagina para o MVP! 🎯',
+          timestamp: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, pbbMessage]);
+        break;
+        
+      case 'suggest_finalize':
+        await finalizeDiscovery();
+        break;
+        
+      default:
+        toast({
+          title: "Sugestão aplicada",
+          description: `Ação: ${action}`,
+        });
+    }
+  };
+
   const deleteSession = async () => {
     if (!session?.id) return;
 
@@ -631,7 +677,15 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
                 onClick={() => setShowTranscription(!showTranscription)}
               >
                 <Mic className="h-4 w-4 mr-2" />
-                {showTranscription ? 'Ocultar' : 'Áudio'}
+                {showTranscription ? 'Ocultar' : 'Transcrição Básica'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEnhancedTranscription(!showEnhancedTranscription)}
+              >
+                <Volume2 className="h-4 w-4 mr-2" />
+                {showEnhancedTranscription ? 'Ocultar' : 'Transcrição Pro'}
               </Button>
               <Button
                 variant="outline"
@@ -677,6 +731,22 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
                 {showSettings ? 'Ocultar' : 'Configurar'}
               </Button>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTimeline(!showTimeline)}
+              >
+                {showTimeline ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                {showTimeline ? 'Ocultar Timeline' : 'Mostrar Timeline'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSuggestions(!showSuggestions)}
+              >
+                {showSuggestions ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+                {showSuggestions ? 'Ocultar Sugestões' : 'Mostrar Sugestões'}
+              </Button>
+              <Button
                 variant="destructive"
                 size="sm"
                 onClick={deleteSession}
@@ -688,6 +758,46 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
           </div>
         </CardHeader>
       </Card>
+
+      {/* Smart Suggestions */}
+      {showSuggestions && (
+        <SmartSuggestions
+          currentStage={session.current_stage}
+          stageStatus={session.stage_status || {
+            business_canvas: 'pending',
+            inception: 'pending',
+            pbb: 'pending', 
+            sprint0: 'pending'
+          }}
+          stageData={{
+            business_canvas_data: session.business_canvas_data,
+            inception_data: session.inception_data,
+            pbb_data: session.pbb_data,
+            sprint0_data: session.sprint0_data
+          }}
+          onSuggestionClick={handleSuggestionClick}
+        />
+      )}
+
+      {/* Discovery Timeline */}
+      {showTimeline && (
+        <DiscoveryTimeline
+          currentStage={session.current_stage}
+          stageStatus={session.stage_status || {
+            business_canvas: 'pending',
+            inception: 'pending',
+            pbb: 'pending',
+            sprint0: 'pending'
+          }}
+          stageData={{
+            business_canvas_data: session.business_canvas_data,
+            inception_data: session.inception_data,
+            pbb_data: session.pbb_data,
+            sprint0_data: session.sprint0_data
+          }}
+          onStageSelect={handleStageSelect}
+        />
+      )}
 
       {/* Stage Status Manager */}
       <StageStatusManager
@@ -727,7 +837,28 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
         />
       )}
 
-      {/* Transcription Plugin */}
+      {/* Enhanced Transcription */}
+      {showEnhancedTranscription && (
+        <EnhancedTranscription
+          sessionId={session.id}
+          onTranscriptionComplete={(transcription) => {
+            const transcriptionMessage: ChatMessage = {
+              role: 'assistant',
+              content: transcription,
+              timestamp: new Date().toISOString(),
+            };
+            
+            setMessages(prev => [...prev, transcriptionMessage]);
+            
+            toast({
+              title: "Transcrição adicionada!",
+              description: "Insights da gravação foram processados e adicionados à conversa.",
+            });
+          }}
+        />
+      )}
+
+      {/* Basic Transcription Plugin */}
       {showTranscription && (
         <MeetingTranscriptionPlugin
           sessionId={session.id}
