@@ -143,28 +143,82 @@ serve(async (req) => {
 
     console.log(`Enviando ${messages.length} mensagens para OpenAI`);
 
-    // Chamar OpenAI
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-5-2025-08-07',
-        messages: messages,
-        max_completion_tokens: 2000,
-      }),
-    });
+    // Chamar OpenAI com fallback e timeout
+    let aiResponse: string;
+    const models = ['gpt-5-2025-08-07', 'gpt-4.1-2025-04-14'];
+    
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      console.log(`Tentando modelo: ${model}`);
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        
+        const requestBody = {
+          model: model,
+          messages: messages,
+          ...(model.startsWith('gpt-5') || model.includes('gpt-4.1') 
+            ? { max_completion_tokens: 2000 } 
+            : { max_tokens: 2000, temperature: 0.7 }
+          )
+        };
+        
+        console.log('Enviando requisição para OpenAI:', { model, messageCount: messages.length });
+        
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${openAIApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error('Erro da OpenAI:', errorData);
-      throw new Error(`Erro da OpenAI: ${response.status}`);
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const errorData = await response.text();
+          console.error(`Erro do modelo ${model}:`, errorData);
+          
+          if (i === models.length - 1) {
+            throw new Error(`Todos os modelos falharam. Último erro: ${response.status}`);
+          }
+          continue; // Tenta próximo modelo
+        }
+
+        const data = await response.json();
+        
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+          console.error('Resposta inválida da OpenAI:', data);
+          if (i === models.length - 1) {
+            throw new Error('Resposta inválida da OpenAI');
+          }
+          continue;
+        }
+        
+        aiResponse = data.choices[0].message.content;
+        
+        if (!aiResponse || aiResponse.trim().length === 0) {
+          console.error('Resposta vazia da OpenAI');
+          if (i === models.length - 1) {
+            throw new Error('Resposta vazia da OpenAI');
+          }
+          continue;
+        }
+        
+        console.log(`Sucesso com modelo ${model}, resposta recebida com ${aiResponse.length} caracteres`);
+        break; // Sucesso, sai do loop
+        
+      } catch (error) {
+        console.error(`Erro com modelo ${model}:`, error);
+        if (i === models.length - 1) {
+          throw error; // Re-throw se foi o último modelo
+        }
+        // Continua para o próximo modelo
+      }
     }
-
-    const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
 
     console.log('Resposta da IA recebida, extraindo dados estruturados...');
 

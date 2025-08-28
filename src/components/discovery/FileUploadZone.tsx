@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, File, X, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { sanitizeFileName, formatFileSize, validateFileType } from "@/utils/fileUtils";
 
 interface FileUploadZoneProps {
   sessionId: string;
@@ -18,12 +19,15 @@ interface FileUploadZoneProps {
 interface UploadedFile {
   id: string;
   name: string;
+  originalName: string;
+  sanitizedName: string;
   size: number;
   type: string;
   path: string;
   status: 'uploading' | 'completed' | 'error';
   progress: number;
   analysis?: any;
+  errorMessage?: string;
 }
 
 export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
@@ -44,36 +48,89 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const { toast } = useToast();
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[], rejectedFiles: any[]) => {
     console.log('Arquivos selecionados:', acceptedFiles);
+    console.log('Arquivos rejeitados:', rejectedFiles);
 
-    const newFiles: UploadedFile[] = acceptedFiles.map(file => ({
-      id: `${Date.now()}-${file.name}`,
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      path: '',
-      status: 'uploading',
-      progress: 0
-    }));
+    // Processar arquivos rejeitados
+    if (rejectedFiles.length > 0) {
+      rejectedFiles.forEach(rejection => {
+        const errorMessages = rejection.errors.map((e: any) => e.message).join(', ');
+        toast({
+          title: "Arquivo rejeitado",
+          description: `${rejection.file.name}: ${errorMessages}`,
+          variant: "destructive",
+        });
+      });
+    }
+
+    // Validar e preparar arquivos aceitos
+    const validFiles: File[] = [];
+    const invalidFiles: string[] = [];
+
+    acceptedFiles.forEach(file => {
+      if (!validateFileType(file, acceptedTypes)) {
+        invalidFiles.push(file.name);
+        return;
+      }
+      
+      const sanitized = sanitizeFileName(file.name);
+      if (sanitized !== file.name) {
+        console.log(`Arquivo sanitizado: ${file.name} -> ${sanitized}`);
+      }
+      
+      validFiles.push(file);
+    });
+
+    // Notificar sobre arquivos inválidos
+    if (invalidFiles.length > 0) {
+      toast({
+        title: "Arquivos não suportados",
+        description: `Os seguintes arquivos não são suportados: ${invalidFiles.join(', ')}`,
+        variant: "destructive",
+      });
+    }
+
+    if (validFiles.length === 0) return;
+
+    const newFiles: UploadedFile[] = validFiles.map(file => {
+      const sanitized = sanitizeFileName(file.name);
+      return {
+        id: `${Date.now()}-${Math.random()}`,
+        name: file.name,
+        originalName: file.name,
+        sanitizedName: sanitized,
+        size: file.size,
+        type: file.type,
+        path: '',
+        status: 'uploading',
+        progress: 0
+      };
+    });
 
     setUploadedFiles(prev => [...prev, ...newFiles]);
 
-    // Upload cada arquivo
-    for (let i = 0; i < acceptedFiles.length; i++) {
-      const file = acceptedFiles[i];
+    // Upload cada arquivo válido
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
       const fileData = newFiles[i];
 
       try {
-        // Simular progresso de upload
+        // Função para atualizar progresso
         const updateProgress = (progress: number) => {
           setUploadedFiles(prev => prev.map(f => 
             f.id === fileData.id ? { ...f, progress } : f
           ));
         };
 
-        // Upload para Supabase Storage
-        const fileName = `${sessionId}/${Date.now()}-${file.name}`;
+        const updateError = (errorMessage: string) => {
+          setUploadedFiles(prev => prev.map(f => 
+            f.id === fileData.id ? { ...f, status: 'error', errorMessage, progress: 0 } : f
+          ));
+        };
+
+        // Upload para Supabase Storage usando nome sanitizado
+        const fileName = `${sessionId}/${Date.now()}-${fileData.sanitizedName}`;
         
         updateProgress(25);
         
@@ -85,13 +142,13 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
 
         updateProgress(50);
 
-        // Salvar informações no banco de dados
+        // Salvar informações no banco de dados (manter nome original para exibição)
         const { data: dbData, error: dbError } = await supabase
           .from('session_attachments')
           .insert({
             session_id: sessionId,
-            file_name: file.name,
-            file_path: uploadData.path,
+            file_name: fileData.originalName, // Nome original para exibição
+            file_path: uploadData.path, // Caminho sanitizado no storage
             file_type: file.type,
             uploaded_by: (await supabase.auth.getUser()).data.user?.id
           })
@@ -119,28 +176,29 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
           description: `${file.name} foi carregado com sucesso.`,
         });
 
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro no upload:', error);
         
+        const errorMessage = error.message || 'Erro desconhecido';
         setUploadedFiles(prev => prev.map(f => 
-          f.id === fileData.id 
-            ? { ...f, status: 'error', progress: 0 }
-            : f
+          f.id === fileData.id ? { ...f, status: 'error', errorMessage, progress: 0 } : f
         ));
 
         toast({
           title: "Erro no upload",
-          description: `Falha ao carregar ${file.name}: ${error.message}`,
+          description: `Falha ao carregar ${fileData.originalName}: ${errorMessage}`,
           variant: "destructive",
         });
       }
     }
 
     // Callback com arquivos completos
-    const completedFiles = uploadedFiles.filter(f => f.status === 'completed');
-    onUploadComplete?.(completedFiles);
+    const completedFiles = newFiles.filter(f => f.status === 'completed');
+    if (completedFiles.length > 0) {
+      onUploadComplete?.(completedFiles);
+    }
 
-  }, [sessionId, onUploadComplete, uploadedFiles, toast]);
+  }, [sessionId, onUploadComplete, toast, acceptedTypes]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -153,13 +211,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
     setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
+  // formatFileSize foi movido para utils/fileUtils.ts
 
   return (
     <div className="space-y-4">
@@ -205,7 +257,7 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="font-medium truncate">{file.name}</p>
+                      <p className="font-medium truncate">{file.originalName}</p>
                       <Badge variant={
                         file.status === 'completed' ? 'default' :
                         file.status === 'error' ? 'destructive' : 'secondary'
@@ -223,10 +275,20 @@ export const FileUploadZone: React.FC<FileUploadZoneProps> = ({
                           <span>{file.progress}%</span>
                         </>
                       )}
+                      {file.sanitizedName !== file.originalName && (
+                        <>
+                          <span>•</span>
+                          <span className="text-xs">Nome sanitizado</span>
+                        </>
+                      )}
                     </div>
                     
                     {file.status === 'uploading' && (
                       <Progress value={file.progress} className="mt-2" />
+                    )}
+                    
+                    {file.status === 'error' && file.errorMessage && (
+                      <p className="text-xs text-destructive mt-1">{file.errorMessage}</p>
                     )}
                   </div>
 

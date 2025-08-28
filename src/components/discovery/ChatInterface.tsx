@@ -263,7 +263,7 @@ Gerado em: ${new Date().toLocaleString('pt-BR')}`;
                       <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                       <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                     </div>
-                    Analisando e gerando perguntas...
+                    Analisando e gerando perguntas... (pode levar até 15s)
                   </div>
                 </div>
               </div>
