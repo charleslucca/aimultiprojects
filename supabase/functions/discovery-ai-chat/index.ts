@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,86 +8,90 @@ const corsHeaders = {
 };
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl!, supabaseServiceRoleKey!);
 
-interface ConversationMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
+// Função para buscar prompt personalizado ou usar padrão
+async function getCustomPrompt(methodology: string): Promise<string> {
+  console.log(`Buscando prompt personalizado para: ${methodology}`);
+  
+  const { data: customPrompt, error } = await supabase
+    .from('custom_prompt_templates')
+    .select('prompt_content')
+    .eq('scope_type', 'global')
+    .eq('prompt_category', 'discovery')
+    .eq('template_name', methodology)
+    .eq('is_active', true)
+    .order('version_number', { ascending: false })
+    .maybeSingle();
+
+  if (customPrompt?.prompt_content) {
+    console.log('Usando prompt personalizado encontrado');
+    return customPrompt.prompt_content;
+  }
+
+  // Fallback para prompts padrão
+  const defaultPrompts: Record<string, string> = {
+    'Business Model Canvas': `Você é um especialista em Business Model Canvas. Seu objetivo é gerar perguntas estruturadas para uma reunião de descoberta sobre o modelo de negócio.
+
+Baseado nas informações coletadas até agora, gere 3-5 perguntas específicas que devem ser feitas em uma reunião para preencher o Business Model Canvas. 
+
+Formato de resposta:
+\`\`\`json
+{
+  "questions": [
+    {
+      "category": "proposta_valor",
+      "question": "Pergunta específica",
+      "context": "Por que esta pergunta é importante"
+    }
+  ],
+  "next_steps": "Próximos passos sugeridos",
+  "meeting_format": "Como conduzir a reunião"
+}
+\`\`\``,
+
+    'Inception Workshop': `Você é um facilitador experiente de Inception Workshops. Seu objetivo é gerar perguntas para uma reunião de inception que defina claramente o produto.
+
+Gere perguntas específicas para uma reunião de inception focando em visão do produto, objetivos, personas e funcionalidades essenciais.
+
+Retorne no formato JSON com perguntas categorizadas.`,
+
+    'Product Backlog Building': `Você é um Product Owner experiente. Seu objetivo é gerar perguntas para uma reunião de construção de backlog priorizado.
+
+Gere perguntas específicas para uma reunião de PBB focando em épicos, funcionalidades, critérios de priorização e estimativas.
+
+Retorne no formato JSON com perguntas categorizadas.`,
+
+    'Sprint 0': `Você é um Scrum Master experiente. Seu objetivo é gerar perguntas para uma reunião de Sprint 0 que prepare a equipe para o desenvolvimento.
+
+Gere perguntas específicas para uma reunião de Sprint 0 focando em configuração do ambiente, definição de ferramentas, padrões de código e processos.
+
+Retorne no formato JSON com perguntas categorizadas.`
+  };
+
+  console.log('Usando prompt padrão');
+  return defaultPrompts[methodology] || defaultPrompts['Business Model Canvas'];
 }
 
-const STAGE_PROMPTS = {
-  business_canvas: `Você é um consultor especialista em Business Model Canvas. Sua missão é ajudar o usuário a definir o modelo de negócio do projeto.
-
-Pergunte sobre:
-- Proposta de valor única
-- Segmentos de clientes-alvo
-- Canais de distribuição
-- Relacionamento com clientes
-- Fontes de receita
-- Recursos principais
-- Atividades-chave
-- Parcerias estratégicas
-- Estrutura de custos
-
-Quando tiver informações suficientes, sugira avançar para a próxima etapa (Inception Workshop).`,
-
-  inception: `Você é um facilitador de Inception Workshop. Ajude a definir a visão e objetivos do projeto.
-
-Explore:
-- Visão do produto (elevator pitch)
-- Objetivos do negócio
-- Personas dos usuários
-- Funcionalidades principais (épicos)
-- Restrições e premissas
-- Riscos identificados
-- Critérios de sucesso
-
-Quando a visão estiver clara, sugira passar para Product Backlog Building.`,
-
-  pbb: `Você é um Product Owner experiente. Ajude a construir o Product Backlog inicial.
-
-Identifique:
-- User Stories principais
-- Critérios de aceitação básicos
-- Priorização por valor/impacto
-- Estimativas iniciais
-- Dependências entre histórias
-- MVP (Minimum Viable Product)
-
-Gere histórias no formato: "Como [persona], eu quero [funcionalidade] para [benefício]"
-
-Quando o backlog inicial estiver definido, sugira avançar para Sprint 0.`,
-
-  sprint0: `Você é um Scrum Master experiente. Ajude a planejar o Sprint 0.
-
-Defina:
-- Definição de Pronto (DoD)
-- Definição de Feito (DoR)
-- Cerimônias do time
-- Estimativas detalhadas
-- Arquitetura inicial
-- Setup do ambiente
-- Padrões de desenvolvimento
-- Plano de release inicial
-
-Quando o Sprint 0 estiver planejado, a descoberta estará completa!`
-};
-
 serve(async (req) => {
+  console.log(`${new Date().toISOString()} - Request received: ${req.method}`);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { sessionId, message, currentStage, conversationHistory } = await req.json();
-    
-    console.log(`Processing message for session ${sessionId}, stage: ${currentStage}`);
+    const { sessionId, message, currentStage, conversationHistory = [] } = await req.json();
+    console.log(`Processing request for session: ${sessionId}, stage: ${currentStage}`);
 
-    // Get current session data
+    if (!sessionId || !message) {
+      throw new Error('SessionId e message são obrigatórios');
+    }
+
+    // Buscar dados completos da sessão para contexto
     const { data: sessionData, error: sessionError } = await supabase
       .from('smart_discovery_sessions')
       .select('*')
@@ -95,57 +99,51 @@ serve(async (req) => {
       .single();
 
     if (sessionError) {
-      console.error('Session error:', sessionError);
-      throw new Error('Session not found');
+      console.error('Erro ao buscar sessão:', sessionError);
+      throw new Error('Sessão não encontrada');
     }
 
-    // Build conversation context
-    const conversationContext = conversationHistory
-      .slice(-6) // Last 6 messages for context
-      .map((msg: ConversationMessage) => ({
+    // Mapear stage atual para metodologia
+    const stageToMethodology: Record<string, string> = {
+      'business_canvas': 'Business Model Canvas',
+      'inception': 'Inception Workshop', 
+      'pbb': 'Product Backlog Building',
+      'sprint0': 'Sprint 0'
+    };
+
+    const methodology = stageToMethodology[currentStage] || 'Business Model Canvas';
+    
+    // Buscar prompt personalizado
+    const systemPrompt = await getCustomPrompt(methodology);
+    
+    // Preparar contexto estruturado da sessão
+    const sessionContext = {
+      session_name: sessionData.session_name,
+      current_stage: sessionData.current_stage,
+      business_canvas_data: sessionData.business_canvas_data || {},
+      inception_data: sessionData.inception_data || {},
+      pbb_data: sessionData.pbb_data || {},
+      sprint0_data: sessionData.sprint0_data || {}
+    };
+
+    // Substituir placeholders no prompt
+    const contextualizedPrompt = systemPrompt
+      .replace('{session_context}', JSON.stringify(sessionContext, null, 2))
+      .replace('{conversation_history}', JSON.stringify(conversationHistory.slice(-10), null, 2));
+
+    // Preparar mensagens para OpenAI (sem limite de 6 mensagens)
+    const messages = [
+      { role: 'system', content: contextualizedPrompt },
+      ...conversationHistory.map((msg: any) => ({
         role: msg.role,
         content: msg.content
-      }));
-
-    // Determine if we should advance to next stage
-    const shouldAdvanceStage = message.toLowerCase().includes('próxima') || 
-                              message.toLowerCase().includes('avançar') ||
-                              message.toLowerCase().includes('continuar');
-
-    let newStage = currentStage;
-    let stageChanged = false;
-    
-    if (shouldAdvanceStage) {
-      const stageOrder = ['business_canvas', 'inception', 'pbb', 'sprint0'];
-      const currentIndex = stageOrder.indexOf(currentStage);
-      if (currentIndex < stageOrder.length - 1) {
-        newStage = stageOrder[currentIndex + 1];
-        stageChanged = true;
-      }
-    }
-
-    // Prepare AI prompt
-    const systemPrompt = STAGE_PROMPTS[newStage as keyof typeof STAGE_PROMPTS] + `
-
-Dados da sessão atual:
-- Business Canvas: ${JSON.stringify(sessionData.business_canvas_data || {})}
-- Inception: ${JSON.stringify(sessionData.inception_data || {})}
-- PBB: ${JSON.stringify(sessionData.pbb_data || {})}
-- Sprint 0: ${JSON.stringify(sessionData.sprint0_data || {})}
-
-Seja conversacional, faça perguntas específicas e guie o usuário através da metodologia.
-Se o usuário fornecer informações importantes, sugira estruturá-las e confirme antes de avançar.
-Mantenha o foco na etapa atual mas considere o contexto das etapas anteriores.`;
-
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...conversationContext,
+      })),
       { role: 'user', content: message }
     ];
 
-    console.log('Calling OpenAI...');
+    console.log(`Enviando ${messages.length} mensagens para OpenAI`);
 
-    // Call OpenAI
+    // Chamar OpenAI
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -155,104 +153,76 @@ Mantenha o foco na etapa atual mas considere o contexto das etapas anteriores.`;
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: messages,
-        max_tokens: 800,
+        max_tokens: 2000,
         temperature: 0.7,
       }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('OpenAI error:', errorText);
-      throw new Error('AI response failed');
+      const errorData = await response.text();
+      console.error('Erro da OpenAI:', errorData);
+      throw new Error(`Erro da OpenAI: ${response.status}`);
     }
 
-    const aiResponse = await response.json();
-    const assistantMessage = aiResponse.choices[0].message.content;
+    const data = await response.json();
+    const aiResponse = data.choices[0].message.content;
 
-    // Extract structured data if the AI suggests it
-    let extractedData: any = {};
+    console.log('Resposta da IA recebida, extraindo dados estruturados...');
+
+    // Extrair dados estruturados da resposta
+    let extractedData = null;
+    const jsonMatch = aiResponse.match(/```json\n(.*?)\n```/s);
     
-    // Simple extraction based on stage and content
-    if (newStage === 'business_canvas' && (assistantMessage.includes('Canvas') || assistantMessage.includes('modelo'))) {
-      // Try to extract business canvas data
-      extractedData.businessCanvas = sessionData.business_canvas_data || {};
-    } else if (newStage === 'inception' && (assistantMessage.includes('visão') || assistantMessage.includes('objetivo'))) {
-      extractedData.inceptionData = sessionData.inception_data || {};
-    } else if (newStage === 'pbb' && (assistantMessage.includes('história') || assistantMessage.includes('backlog'))) {
-      extractedData.pbbData = sessionData.pbb_data || {};
-      // Generate some sample user stories if backlog is mentioned
-      if (assistantMessage.toLowerCase().includes('backlog') && !sessionData.generated_backlog?.length) {
-        extractedData.backlog = [
-          {
-            id: 1,
-            title: "Cadastro de usuário",
-            description: "Como usuário, eu quero me cadastrar na plataforma para acessar as funcionalidades",
-            priority: "Alta",
-            estimate: "5 pontos"
-          }
-        ];
+    if (jsonMatch) {
+      try {
+        extractedData = JSON.parse(jsonMatch[1]);
+        console.log('Dados estruturados extraídos:', extractedData);
+      } catch (parseError) {
+        console.log('Erro ao fazer parse do JSON, continuando sem dados estruturados');
       }
-    } else if (newStage === 'sprint0') {
-      extractedData.sprint0Data = sessionData.sprint0_data || {};
     }
 
-    // Update session in database if stage changed or data extracted
-    const updateData: any = {
-      updated_at: new Date().toISOString()
-    };
+    // Salvar dados no campo específico baseado no stage
+    if (extractedData) {
+      const updateData: any = {};
+      
+      if (currentStage === 'business_canvas') {
+        updateData.business_canvas_data = extractedData;
+      } else if (currentStage === 'inception') {
+        updateData.inception_data = extractedData;
+      } else if (currentStage === 'pbb') {
+        updateData.pbb_data = extractedData;
+      } else if (currentStage === 'sprint0') {
+        updateData.sprint0_data = extractedData;
+      }
 
-    if (stageChanged) {
-      updateData.current_stage = newStage;
-    }
+      if (Object.keys(updateData).length > 0) {
+        const { error: updateError } = await supabase
+          .from('smart_discovery_sessions')
+          .update(updateData)
+          .eq('id', sessionId);
 
-    if (extractedData.businessCanvas) {
-      updateData.business_canvas_data = { ...sessionData.business_canvas_data, ...extractedData.businessCanvas };
+        if (updateError) {
+          console.error('Erro ao salvar dados estruturados:', updateError);
+        } else {
+          console.log('Dados estruturados salvos com sucesso');
+        }
+      }
     }
-    if (extractedData.inceptionData) {
-      updateData.inception_data = { ...sessionData.inception_data, ...extractedData.inceptionData };
-    }
-    if (extractedData.pbbData) {
-      updateData.pbb_data = { ...sessionData.pbb_data, ...extractedData.pbbData };
-    }
-    if (extractedData.sprint0Data) {
-      updateData.sprint0_data = { ...sessionData.sprint0_data, ...extractedData.sprint0Data };
-    }
-    if (extractedData.backlog) {
-      updateData.generated_backlog = extractedData.backlog;
-    }
-
-    // Mark as completed if we're done with sprint0
-    if (newStage === 'sprint0' && assistantMessage.toLowerCase().includes('completa')) {
-      updateData.status = 'completed';
-    }
-
-    const { error: updateError } = await supabase
-      .from('smart_discovery_sessions')
-      .update(updateData)
-      .eq('id', sessionId);
-
-    if (updateError) {
-      console.error('Session update error:', updateError);
-    }
-
-    console.log('Discovery AI chat completed successfully');
 
     return new Response(JSON.stringify({
-      response: assistantMessage,
-      stageChanged,
-      newStage: stageChanged ? newStage : currentStage,
-      stageData: extractedData,
-      ...extractedData
+      response: aiResponse,
+      extractedData,
+      sessionContext
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-  } catch (error: any) {
-    console.error('Error in discovery-ai-chat function:', error);
-    
-    return new Response(JSON.stringify({ 
-      error: error.message || 'Internal server error',
-      response: 'Desculpe, houve um erro ao processar sua mensagem. Tente novamente.'
+  } catch (error) {
+    console.error('Erro no processamento:', error);
+    return new Response(JSON.stringify({
+      error: error.message,
+      details: 'Erro interno do servidor'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
