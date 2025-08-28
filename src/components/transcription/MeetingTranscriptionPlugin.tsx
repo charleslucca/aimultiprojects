@@ -33,7 +33,21 @@ interface TranscriptionResult {
   created_at: string;
 }
 
-export default function MeetingTranscriptionPlugin() {
+interface MeetingTranscriptionPluginProps {
+  sessionId?: string;
+  sessionType?: string;
+  projectId?: string;
+  clientId?: string | null;
+  onTranscriptionComplete?: (data: any) => void;
+}
+
+export default function MeetingTranscriptionPlugin({
+  sessionId,
+  sessionType = 'smart_hub',
+  projectId,
+  clientId,
+  onTranscriptionComplete
+}: MeetingTranscriptionPluginProps = {}) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
@@ -142,15 +156,20 @@ export default function MeetingTranscriptionPlugin() {
       setProgress(40);
 
       // Create meeting transcription record
+      const transcriptionRecord = {
+        meeting_name: meetingName,
+        audio_file_path: fileName,
+        session_type: sessionType,
+        created_by: user.id,
+        processing_status: 'processing',
+        ...(sessionId && { session_id: sessionId }),
+        ...(projectId && { project_id: projectId }),
+        ...(clientId && { client_id: clientId })
+      };
+
       const { data: transcriptionData, error: insertError } = await supabase
         .from('meeting_transcriptions' as any)
-        .insert({
-          meeting_name: meetingName,
-          audio_file_path: fileName,
-          session_type: 'smart_hub',
-          created_by: user.id,
-          processing_status: 'processing'
-        })
+        .insert(transcriptionRecord)
         .select()
         .single();
 
@@ -172,6 +191,16 @@ export default function MeetingTranscriptionPlugin() {
         title: "Sucesso",
         description: "Transcrição iniciada! O processamento será concluído em breve.",
       });
+
+      // Call completion callback if provided
+      if (onTranscriptionComplete && transcriptionData) {
+        onTranscriptionComplete({
+          transcriptionId: (transcriptionData as any)?.id,
+          meetingName,
+          sessionId,
+          status: 'processing'
+        });
+      }
 
       // Reset form
       setAudioBlob(null);
