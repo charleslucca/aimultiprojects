@@ -3,13 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Settings, FileText, Download, History, Mic, Users, Target, PlayCircle } from 'lucide-react';
+import { ArrowLeft, Settings, FileText, Download, History, Mic, Users, Target, PlayCircle, Trash2, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ChatInterface } from './ChatInterface';
 import { DiscoveryWizard } from './DiscoveryWizard';
 import { FileUploadZone } from './FileUploadZone';
+import StageStatusManager from './StageStatusManager';
 import MeetingTranscriptionPlugin from '../transcription/MeetingTranscriptionPlugin';
+import { DiscoveryExporter } from '@/utils/discoveryExporter';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -29,6 +31,14 @@ interface DiscoverySession {
   sprint0_data?: any;
   generated_backlog?: any;
   related_project_id?: string;
+  stage_status?: {
+    business_canvas: 'pending' | 'in_progress' | 'completed';
+    inception: 'pending' | 'in_progress' | 'completed';
+    pbb: 'pending' | 'in_progress' | 'completed';
+    sprint0: 'pending' | 'in_progress' | 'completed';
+  };
+  finalized_at?: string;
+  final_document?: any;
 }
 
 interface ConversationalDiscoveryProps {
@@ -68,7 +78,15 @@ const ConversationalDiscovery: React.FC<ConversationalDiscoveryProps> = ({
 
       if (error) throw error;
 
-      setSession(data as DiscoverySession);
+      setSession({
+        ...data,
+        stage_status: data.stage_status as any || {
+          business_canvas: 'pending',
+          inception: 'pending', 
+          pbb: 'pending',
+          sprint0: 'pending'
+        }
+      } as DiscoverySession);
       
       // Carregar mensagens iniciais baseadas nos dados da sessão
       const welcomeMessages: ChatMessage[] = [];
@@ -258,7 +276,7 @@ const ConversationalDiscovery: React.FC<ConversationalDiscoveryProps> = ({
         stage: 'Inception Workshop',
         icon: '👥',
         questions: session.inception_data.questions,
-        next_steps: session.inception_data.next_steps,
+        next_steps: session.inception_data.next_steps,  
         meeting_format: session.inception_data.meeting_format
       });
     }
@@ -283,6 +301,18 @@ const ConversationalDiscovery: React.FC<ConversationalDiscoveryProps> = ({
       });
     }
 
+    // INCLUIR CONVERSA COMPLETA NO EXPORT
+    const conversationSection = `
+${'='.repeat(60)}
+CONVERSA COMPLETA:
+${'='.repeat(60)}
+
+${messages.map((msg, index) => `
+[${new Date(msg.timestamp).toLocaleString('pt-BR')}] ${msg.role === 'user' ? '👤 USUÁRIO' : '🤖 ASSISTENTE'}:
+${msg.content.replace(/```json[\s\S]*?```/g, '[Dados estruturados extraídos]')}
+${'~'.repeat(40)}
+`).join('\n')}`;
+
     const exportContent = `DISCOVERY COMPLETO - ${session.session_name.toUpperCase()}
 ${'='.repeat(60)}
 
@@ -290,6 +320,7 @@ SESSÃO: ${session.session_name}
 DATA: ${new Date().toLocaleDateString('pt-BR')}
 STATUS: ${session.status}
 ETAPA ATUAL: ${session.current_stage.replace('_', ' ').toUpperCase()}
+${session.finalized_at ? `FINALIZADO EM: ${new Date(session.finalized_at).toLocaleString('pt-BR')}` : ''}
 
 ${'='.repeat(60)}
 
@@ -317,6 +348,8 @@ ${session.generated_backlog?.map((item: any, index: number) =>
   `${index + 1}. ${item.title || item.description}`
 ).join('\n') || 'Nenhum item de backlog gerado ainda.'}
 
+${conversationSection}
+
 ${'='.repeat(60)}
 RESUMO DA CONVERSA:
 Total de mensagens: ${messages.length}
@@ -339,6 +372,205 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
       title: "Discovery exportado!",
       description: "Arquivo completo baixado com sucesso.",
     });
+  };
+
+  const exportExcelReport = () => {
+    if (!session) return;
+    
+    try {
+      DiscoveryExporter.downloadExcel(session, messages);
+      toast({
+        title: "Excel gerado!",
+        description: "Relatório completo baixado em formato Excel.",
+      });
+    } catch (error) {
+      console.error('Erro ao gerar Excel:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível gerar o relatório Excel.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStageComplete = async (stage: string) => {
+    if (!session?.id) return;
+
+    try {
+      const newStageStatus = {
+        ...session.stage_status,
+        [stage]: 'completed'
+      };
+
+      const { error } = await supabase
+        .from('smart_discovery_sessions')
+        .update({ 
+          stage_status: newStageStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', session.id);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? {
+        ...prev,
+        stage_status: newStageStatus
+      } : null);
+
+      toast({
+        title: "Etapa finalizada!",
+        description: `${stage.replace('_', ' ').toUpperCase()} marcada como concluída.`,
+      });
+
+    } catch (error) {
+      console.error('Erro ao finalizar etapa:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível finalizar a etapa.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStageSelect = async (stage: string) => {
+    if (!session?.id || stage === session.current_stage) return;
+
+    try {
+      const newStageStatus = {
+        ...session.stage_status,
+        [stage]: session.stage_status?.[stage as keyof typeof session.stage_status] === 'pending' ? 'in_progress' : session.stage_status?.[stage as keyof typeof session.stage_status]
+      };
+
+      const { error } = await supabase
+        .from('smart_discovery_sessions')
+        .update({ 
+          current_stage: stage,
+          stage_status: newStageStatus
+        })
+        .eq('id', session.id);
+
+      if (error) throw error;
+
+      setSession(prev => prev ? {
+        ...prev,
+        current_stage: stage,
+        stage_status: newStageStatus
+      } : null);
+
+      // Adicionar mensagem de contexto sobre mudança de etapa
+      const contextMessage: ChatMessage = {
+        role: 'assistant',
+        content: `🔄 **Mudamos para a etapa: ${stage.replace('_', ' ').toUpperCase()}**\n\nAgora vou focar nas questões específicas desta etapa. Como posso ajudar?`,
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages(prev => [...prev, contextMessage]);
+
+      toast({
+        title: "Etapa alterada!",
+        description: `Agora estamos na etapa: ${stage.replace('_', ' ').toUpperCase()}`,
+      });
+
+    } catch (error) {
+      console.error('Erro ao alterar etapa:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível alterar a etapa.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const finalizeDiscovery = async () => {
+    if (!session?.id) return;
+
+    const confirmed = window.confirm(
+      `Deseja finalizar o Discovery "${session.session_name}"?\n\nIsso irá:\n- Gerar documento final consolidado\n- Marcar sessão como concluída\n- Analisar todas as etapas com IA\n\nEsta ação não pode ser desfeita.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      toast({
+        title: "Finalizando Discovery...",
+        description: "Gerando documento final com IA. Isso pode levar alguns segundos.",
+      });
+
+      const { data, error } = await supabase.functions.invoke('finalize-discovery', {
+        body: { sessionId: session.id }
+      });
+
+      if (error) throw error;
+
+      setSession(prev => prev ? {
+        ...prev,
+        status: 'completed',
+        finalized_at: new Date().toISOString(),
+        final_document: data.final_document
+      } : null);
+
+      toast({
+        title: "Discovery Finalizado! 🎉",
+        description: `Documento final gerado com ${data.completeness_percentage}% de completude.`,
+      });
+
+    } catch (error) {
+      console.error('Erro ao finalizar discovery:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível finalizar o discovery.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteSession = async () => {
+    if (!session?.id) return;
+
+    const confirmed = window.confirm(
+      `⚠️ ATENÇÃO: Deseja EXCLUIR permanentemente o Discovery "${session.session_name}"?\n\nTodos os dados, conversas e versões serão perdidos.\n\nEsta ação NÃO PODE ser desfeita.`
+    );
+
+    if (!confirmed) return;
+
+    const doubleConfirm = window.prompt(
+      `Para confirmar a exclusão, digite: "${session.session_name}"`
+    );
+
+    if (doubleConfirm !== session.session_name) {
+      toast({
+        title: "Exclusão cancelada",
+        description: "Nome não confere. Sessão não foi excluída.",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('smart_discovery_sessions')
+        .delete()
+        .eq('id', session.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sessão excluída",
+        description: "Discovery foi excluído permanentemente.",
+      });
+
+      // Redirecionar de volta
+      if (onBack) {
+        onBack();
+      }
+
+    } catch (error) {
+      console.error('Erro ao excluir sessão:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível excluir a sessão.",
+        variant: "destructive",
+      });
+    }
   };
 
   useEffect(() => {
@@ -384,7 +616,7 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
               </div>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -415,8 +647,27 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
                 onClick={exportComprehensiveData}
               >
                 <Download className="h-4 w-4 mr-2" />
-                Exportar Completo
+                Exportar TXT
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportExcelReport}
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Exportar Excel
+              </Button>
+              {session.status !== 'completed' && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={finalizeDiscovery}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Finalizar Discovery
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -425,10 +676,37 @@ Powered by Smart Hub 2.0 - Discovery Conversacional`;
                 <Settings className="h-4 w-4 mr-2" />
                 {showSettings ? 'Ocultar' : 'Configurar'}
               </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={deleteSession}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir
+              </Button>
             </div>
           </div>
         </CardHeader>
       </Card>
+
+      {/* Stage Status Manager */}
+      <StageStatusManager
+        stageStatus={session.stage_status || {
+          business_canvas: 'pending',
+          inception: 'pending', 
+          pbb: 'pending',
+          sprint0: 'pending'
+        }}
+        stageData={{
+          business_canvas_data: session.business_canvas_data,
+          inception_data: session.inception_data,
+          pbb_data: session.pbb_data,
+          sprint0_data: session.sprint0_data
+        }}
+        currentStage={session.current_stage}
+        onStageComplete={handleStageComplete}
+        onStageSelect={handleStageSelect}
+      />
 
       {/* Progress Wizard */}
       <DiscoveryWizard 
