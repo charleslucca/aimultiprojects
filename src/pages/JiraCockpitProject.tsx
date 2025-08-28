@@ -407,6 +407,8 @@ const JiraCockpitProject: React.FC = () => {
             issues={issues}
             projects={[project]}
             selectedConfig={configuration}
+            projectId={projectId}
+            clientId={project?.client_id}
           />
         </TabsContent>
 

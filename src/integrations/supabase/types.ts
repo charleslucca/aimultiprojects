@@ -141,6 +141,117 @@ export type Database = {
           },
         ]
       }
+      custom_prompt_templates: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          created_by: string
+          id: string
+          is_active: boolean | null
+          parent_version_id: string | null
+          project_id: string | null
+          prompt_category: string
+          prompt_content: string
+          scope_type: string
+          template_name: string
+          updated_at: string | null
+          version_number: number | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          created_by: string
+          id?: string
+          is_active?: boolean | null
+          parent_version_id?: string | null
+          project_id?: string | null
+          prompt_category: string
+          prompt_content: string
+          scope_type: string
+          template_name: string
+          updated_at?: string | null
+          version_number?: number | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          is_active?: boolean | null
+          parent_version_id?: string | null
+          project_id?: string | null
+          prompt_category?: string
+          prompt_content?: string
+          scope_type?: string
+          template_name?: string
+          updated_at?: string | null
+          version_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_prompt_templates_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_prompt_templates_parent_version_id_fkey"
+            columns: ["parent_version_id"]
+            isOneToOne: false
+            referencedRelation: "custom_prompt_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_prompt_templates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discovery_session_versions: {
+        Row: {
+          changes_summary: string | null
+          created_at: string | null
+          created_by: string
+          id: string
+          session_id: string
+          snapshot_data: Json
+          version_name: string | null
+          version_number: number
+        }
+        Insert: {
+          changes_summary?: string | null
+          created_at?: string | null
+          created_by: string
+          id?: string
+          session_id: string
+          snapshot_data: Json
+          version_name?: string | null
+          version_number: number
+        }
+        Update: {
+          changes_summary?: string | null
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          session_id?: string
+          snapshot_data?: Json
+          version_name?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_session_versions_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "smart_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jira_ai_insights: {
         Row: {
           alert_category: string | null
@@ -680,6 +791,63 @@ export type Database = {
           },
         ]
       }
+      project_insights_comments: {
+        Row: {
+          ai_analysis: Json | null
+          client_id: string | null
+          content: string
+          created_at: string | null
+          created_by: string
+          id: string
+          insight_origin: string
+          insight_type: string | null
+          processed: boolean | null
+          project_id: string
+          tags: string[] | null
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          client_id?: string | null
+          content: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          insight_origin: string
+          insight_type?: string | null
+          processed?: boolean | null
+          project_id: string
+          tags?: string[] | null
+        }
+        Update: {
+          ai_analysis?: Json | null
+          client_id?: string | null
+          content?: string
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          insight_origin?: string
+          insight_type?: string | null
+          processed?: boolean | null
+          project_id?: string
+          tags?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_insights_comments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_insights_comments_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_integrations: {
         Row: {
           client_id: string | null
@@ -913,6 +1081,47 @@ export type Database = {
           },
         ]
       }
+      session_attachments: {
+        Row: {
+          ai_analysis: Json | null
+          file_name: string
+          file_path: string
+          file_type: string
+          id: string
+          session_id: string
+          uploaded_at: string | null
+          uploaded_by: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          file_name: string
+          file_path: string
+          file_type: string
+          id?: string
+          session_id: string
+          uploaded_at?: string | null
+          uploaded_by: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          file_name?: string
+          file_path?: string
+          file_type?: string
+          id?: string
+          session_id?: string
+          uploaded_at?: string | null
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_attachments_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "smart_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       smart_delivery_sessions: {
         Row: {
           created_at: string
@@ -966,59 +1175,91 @@ export type Database = {
       smart_discovery_sessions: {
         Row: {
           business_canvas_data: Json | null
+          can_create_project: boolean | null
           created_at: string
           current_stage: string
+          discovery_name: string
+          discovery_type: string | null
           export_history: Json | null
           generated_backlog: Json | null
           id: string
           inception_data: Json | null
+          parent_session_id: string | null
           pbb_data: Json | null
           project_id: string | null
+          related_project_id: string | null
           session_metadata: Json | null
           session_name: string
           sprint0_data: Json | null
           status: string
           updated_at: string
           user_id: string
+          version_number: number | null
         }
         Insert: {
           business_canvas_data?: Json | null
+          can_create_project?: boolean | null
           created_at?: string
           current_stage?: string
+          discovery_name?: string
+          discovery_type?: string | null
           export_history?: Json | null
           generated_backlog?: Json | null
           id?: string
           inception_data?: Json | null
+          parent_session_id?: string | null
           pbb_data?: Json | null
           project_id?: string | null
+          related_project_id?: string | null
           session_metadata?: Json | null
           session_name: string
           sprint0_data?: Json | null
           status?: string
           updated_at?: string
           user_id: string
+          version_number?: number | null
         }
         Update: {
           business_canvas_data?: Json | null
+          can_create_project?: boolean | null
           created_at?: string
           current_stage?: string
+          discovery_name?: string
+          discovery_type?: string | null
           export_history?: Json | null
           generated_backlog?: Json | null
           id?: string
           inception_data?: Json | null
+          parent_session_id?: string | null
           pbb_data?: Json | null
           project_id?: string | null
+          related_project_id?: string | null
           session_metadata?: Json | null
           session_name?: string
           sprint0_data?: Json | null
           status?: string
           updated_at?: string
           user_id?: string
+          version_number?: number | null
         }
         Relationships: [
           {
+            foreignKeyName: "smart_discovery_sessions_parent_session_id_fkey"
+            columns: ["parent_session_id"]
+            isOneToOne: false
+            referencedRelation: "smart_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "smart_discovery_sessions_project_id_fkey"
             columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "smart_discovery_sessions_related_project_id_fkey"
+            columns: ["related_project_id"]
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]

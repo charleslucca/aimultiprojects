@@ -4,10 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import InsightDetailModal from './InsightDetailModal';
 import { processInsightForDisplay, extractCriticalAlerts, type CriticalAlert } from '@/utils/insightUtils';
+import { InsightComments } from '@/components/insights/InsightComments';
 import { 
   AlertTriangle, 
   TrendingUp, 
@@ -27,7 +29,8 @@ import {
   Calendar,
   Flame,
   UserX,
-  UserMinus
+  UserMinus,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,9 +39,11 @@ interface AIInsightsPanelProps {
   issues: any[];
   projects: any[];
   selectedConfig?: any;
+  projectId?: string;
+  clientId?: string;
 }
 
-const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, projects, selectedConfig }) => {
+const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, projects, selectedConfig, projectId, clientId }) => {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState<string | null>(null);
   const [selectedInsight, setSelectedInsight] = useState<any>(null);
@@ -369,135 +374,154 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
         </CardContent>
       </Card>
 
-      {/* Insights List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Eye className="h-5 w-5" />
-            Todos os Insights ({filteredInsights.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {filteredInsights.length > 0 ? (
-            <div className="space-y-4">
-              {filteredInsights.map((insight) => {
-                const IconComponent = getInsightIcon(insight.insight_type);
-                const issue = insight.issue_id ? issues.find(i => i.id === insight.issue_id) : null;
-                const insightData = insight.insight_data || {};
-                const criticalAlerts = insight.critical_alerts?.filter((a: CriticalAlert) => a.severity === 'CRITICAL') || [];
-                const hasCritical = criticalAlerts.length > 0;
+      {/* Tabs com Insights da IA e Comentários Manuais */}
+      <Tabs defaultValue="ai-insights" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="ai-insights" className="flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            Insights IA ({filteredInsights.length})
+          </TabsTrigger>
+          <TabsTrigger value="manual-comments" className="flex items-center gap-2">
+            <MessageSquare className="h-4 w-4" />
+            Insights Manuais
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="ai-insights" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Eye className="h-5 w-5" />
+                Insights Gerados pela IA ({filteredInsights.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {filteredInsights.length > 0 ? (
+                <div className="space-y-4">
+                  {filteredInsights.map((insight) => {
+                    const IconComponent = getInsightIcon(insight.insight_type);
+                    const issue = insight.issue_id ? issues.find(i => i.id === insight.issue_id) : null;
+                    const insightData = insight.insight_data || {};
+                    const criticalAlerts = insight.critical_alerts?.filter((a: CriticalAlert) => a.severity === 'CRITICAL') || [];
+                    const hasCritical = criticalAlerts.length > 0;
 
-                return (
-                  <div 
-                    key={insight.id} 
-                    className={cn(
-                      "p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors",
-                      hasCritical && "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-950/10"
-                    )}
-                    onClick={() => setSelectedInsight(insight)}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-start gap-3 flex-1">
-                        <IconComponent className={cn(
-                          "h-5 w-5 mt-1 flex-shrink-0",
-                          hasCritical ? "text-red-500" : "text-primary"
-                        )} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2 flex-wrap">
-                            <Badge variant="outline">
-                              {formatInsightType(insight.insight_type)}
-                            </Badge>
-                            <Badge 
-                              variant={getConfidenceBadgeVariant(insight.confidence_score)}
-                              className="text-xs"
-                            >
-                              {Math.round(insight.confidence_score * 100)}%
-                            </Badge>
-                            {hasCritical && (
-                              <Badge variant="destructive" className="text-xs">
-                                <Flame className="h-3 w-3 mr-1" />
-                                CRÍTICO
-                              </Badge>
-                            )}
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(insight.generated_at).toLocaleDateString('pt-BR')}
-                            </div>
-                          </div>
-                          
-                          {/* Critical Alerts Preview */}
-                          {criticalAlerts.length > 0 && (
-                            <div className="mb-3 p-2 bg-red-100 dark:bg-red-950/20 border-l-4 border-red-500 rounded-r">
-                              <div className="flex items-center gap-2 mb-1">
-                                <Flame className="h-4 w-4 text-red-600" />
-                                <span className="text-sm font-semibold text-red-800 dark:text-red-300">
-                                  Ação Crítica Necessária
-                                </span>
+                    return (
+                      <div 
+                        key={insight.id} 
+                        className={cn(
+                          "p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors",
+                          hasCritical && "border-red-200 bg-red-50/30 dark:border-red-800 dark:bg-red-950/10"
+                        )}
+                        onClick={() => setSelectedInsight(insight)}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-start gap-3 flex-1">
+                            <IconComponent className={cn(
+                              "h-5 w-5 mt-1 flex-shrink-0",
+                              hasCritical ? "text-red-500" : "text-primary"
+                            )} />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                <Badge variant="outline">
+                                  {formatInsightType(insight.insight_type)}
+                                </Badge>
+                                <Badge 
+                                  variant={getConfidenceBadgeVariant(insight.confidence_score)}
+                                  className="text-xs"
+                                >
+                                  {Math.round(insight.confidence_score * 100)}%
+                                </Badge>
+                                {hasCritical && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    <Flame className="h-3 w-3 mr-1" />
+                                    CRÍTICO
+                                  </Badge>
+                                )}
+                                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <Calendar className="h-3 w-3" />
+                                  {new Date(insight.generated_at).toLocaleDateString('pt-BR')}
+                                </div>
                               </div>
-                              <p className="text-sm text-red-700 dark:text-red-400 line-clamp-2">
-                                {criticalAlerts[0].description}
-                              </p>
-                              {criticalAlerts.length > 1 && (
-                                <p className="text-xs text-red-600 dark:text-red-500 mt-1">
-                                  +{criticalAlerts.length - 1} outro(s) alerta(s) crítico(s)
+                              
+                              {/* Critical Alerts Preview */}
+                              {criticalAlerts.length > 0 && (
+                                <div className="mb-3 p-2 bg-red-100 dark:bg-red-950/20 border-l-4 border-red-500 rounded-r">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Flame className="h-4 w-4 text-red-600" />
+                                    <span className="text-sm font-semibold text-red-800 dark:text-red-300">
+                                      Ação Crítica Necessária
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-red-700 dark:text-red-400 line-clamp-2">
+                                    {criticalAlerts[0].description}
+                                  </p>
+                                  {criticalAlerts.length > 1 && (
+                                    <p className="text-xs text-red-600 dark:text-red-500 mt-1">
+                                      +{criticalAlerts.length - 1} outro(s) alerta(s) crítico(s)
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              
+                              {issue && (
+                                <div className="mb-2">
+                                  <Badge variant="secondary" className="font-mono text-xs">
+                                    {issue.jira_key}
+                                  </Badge>
+                                  <p className="font-medium mt-1 line-clamp-1">{issue.summary}</p>
+                                </div>
+                              )}
+                              
+                              {/* Executive Summary */}
+                              {insight.executive_summary && (
+                                <p className="text-muted-foreground text-sm line-clamp-2 mb-2 font-medium">
+                                  {insight.executive_summary}
                                 </p>
                               )}
+                              
+                              {/* Fallback to regular summary */}
+                              {!insight.executive_summary && insightData.summary && (
+                                <p className="text-muted-foreground text-sm line-clamp-2 mb-2">
+                                  {insightData.summary}
+                                </p>
+                              )}
+                              
+                              {insightData.key_findings && Array.isArray(insightData.key_findings) && (
+                                <div className="text-xs text-muted-foreground">
+                                  <strong>Principais descobertas:</strong> {insightData.key_findings.slice(0, 2).join(' • ')}
+                                  {insightData.key_findings.length > 2 && '...'}
+                                </div>
+                              )}
                             </div>
-                          )}
-                          
-                          {issue && (
-                            <div className="mb-2">
-                              <Badge variant="secondary" className="font-mono text-xs">
-                                {issue.jira_key}
-                              </Badge>
-                              <p className="font-medium mt-1 line-clamp-1">{issue.summary}</p>
-                            </div>
-                          )}
-                          
-                          {/* Executive Summary */}
-                          {insight.executive_summary && (
-                            <p className="text-muted-foreground text-sm line-clamp-2 mb-2 font-medium">
-                              {insight.executive_summary}
-                            </p>
-                          )}
-                          
-                          {/* Fallback to regular summary */}
-                          {!insight.executive_summary && insightData.summary && (
-                            <p className="text-muted-foreground text-sm line-clamp-2 mb-2">
-                              {insightData.summary}
-                            </p>
-                          )}
-                          
-                          {insightData.key_findings && Array.isArray(insightData.key_findings) && (
-                            <div className="text-xs text-muted-foreground">
-                              <strong>Principais descobertas:</strong> {insightData.key_findings.slice(0, 2).join(' • ')}
-                              {insightData.key_findings.length > 2 && '...'}
-                            </div>
-                          )}
+                          </div>
+                          <Button variant="ghost" size="sm" className="ml-2 flex-shrink-0">
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <Button variant="ghost" size="sm" className="ml-2 flex-shrink-0">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-              <p className="text-lg font-medium">Nenhum insight encontrado</p>
-              <p className="text-sm">
-                {searchTerm || selectedType !== 'all' 
-                  ? 'Tente ajustar os filtros de busca' 
-                  : 'Execute uma sincronização para gerar insights'
-                }
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Brain className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p className="text-lg font-medium">Nenhum insight encontrado</p>
+                  <p className="text-sm">
+                    {searchTerm || selectedType !== 'all' 
+                      ? 'Tente ajustar os filtros de busca' 
+                      : 'Execute uma sincronização para gerar insights'
+                    }
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="manual-comments" className="mt-6">
+          {projectId && <InsightComments projectId={projectId} clientId={clientId} />}
+        </TabsContent>
+      </Tabs>
 
       {/* Quick Actions */}
       <Card>
