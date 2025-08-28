@@ -20,11 +20,8 @@ import {
   Upload
 } from "lucide-react";
 
-// Stage Components
-import { BusinessModelCanvas } from "@/components/smart/BusinessModelCanvas";
-import { InceptionWorkshop } from "@/components/smart/InceptionWorkshop";
-import { ProductBacklogBuilding } from "@/components/smart/ProductBacklogBuilding";
-import { Sprint0 } from "@/components/smart/Sprint0";
+// Import ConversationalDiscovery for chat-based discovery
+import ConversationalDiscovery from "@/components/discovery/ConversationalDiscovery";
 
 interface DiscoverySession {
   id: string;
@@ -73,48 +70,8 @@ export default function SmartDiscovery() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [session, setSession] = useState<DiscoverySession | null>(null);
   const [loading, setLoading] = useState(false);
-  const [currentStageIndex, setCurrentStageIndex] = useState(0);
 
-  useEffect(() => {
-    if (sessionId) {
-      loadSession();
-    }
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (session) {
-      const stageIndex = STAGES.findIndex(s => s.id === session.current_stage);
-      setCurrentStageIndex(stageIndex >= 0 ? stageIndex : 0);
-    }
-  }, [session]);
-
-  const loadSession = async () => {
-    if (!sessionId || !user) return;
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('smart_discovery_sessions')
-        .select('*')
-        .eq('id', sessionId)
-        .eq('user_id', user.id)
-        .single();
-
-      if (error) throw error;
-      setSession(data);
-    } catch (error: any) {
-      toast({
-        title: "Erro ao carregar sessão",
-        description: error.message,
-        variant: "destructive",
-      });
-      navigate('/smart-hub');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const createNewSession = async () => {
     if (!user) return;
@@ -129,8 +86,10 @@ export default function SmartDiscovery() {
         .insert({
           user_id: user.id,
           session_name: sessionName,
+          discovery_name: sessionName,
           current_stage: 'business_canvas',
-          status: 'in_progress'
+          status: 'in_progress',
+          discovery_type: 'conversational'
         })
         .select()
         .single();
@@ -139,7 +98,7 @@ export default function SmartDiscovery() {
 
       toast({
         title: "Sessão criada",
-        description: "Nova sessão de Discovery Inteligente iniciada",
+        description: "Nova sessão de Discovery Conversacional iniciada",
       });
 
       navigate(`/smart-hub/discovery/${data.id}`);
@@ -154,101 +113,6 @@ export default function SmartDiscovery() {
     }
   };
 
-  const updateSessionData = async (stageData: any, stageName: string) => {
-    if (!session || !user) return;
-
-    try {
-      const updateField = `${stageName}_data`;
-      
-      const { error } = await supabase
-        .from('smart_discovery_sessions')
-        .update({
-          [updateField]: stageData,
-          current_stage: stageName
-        })
-        .eq('id', session.id);
-
-      if (error) throw error;
-
-      setSession(prev => prev ? {
-        ...prev,
-        [updateField]: stageData,
-        current_stage: stageName
-      } : null);
-    } catch (error: any) {
-      toast({
-        title: "Erro ao salvar",
-        description: error.message,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const nextStage = () => {
-    if (currentStageIndex < STAGES.length - 1) {
-      const nextStage = STAGES[currentStageIndex + 1];
-      setCurrentStageIndex(currentStageIndex + 1);
-      
-      if (session) {
-        updateSessionData(session[`${nextStage.id}_data` as keyof DiscoverySession] || {}, nextStage.id);
-      }
-    }
-  };
-
-  const prevStage = () => {
-    if (currentStageIndex > 0) {
-      const prevStage = STAGES[currentStageIndex - 1];
-      setCurrentStageIndex(currentStageIndex - 1);
-      
-      if (session) {
-        updateSessionData(session[`${prevStage.id}_data` as keyof DiscoverySession] || {}, prevStage.id);
-      }
-    }
-  };
-
-  const getStageComponent = () => {
-    if (!session) return null;
-
-    const currentStage = STAGES[currentStageIndex];
-    const stageData = session[`${currentStage.id}_data` as keyof DiscoverySession] as any;
-
-    switch (currentStage.id) {
-      case 'business_canvas':
-        return (
-          <BusinessModelCanvas
-            data={stageData}
-            onSave={(data) => updateSessionData(data, 'business_canvas')}
-            sessionId={session.id}
-          />
-        );
-      case 'inception':
-        return (
-          <InceptionWorkshop
-            data={stageData}
-            onSave={(data) => updateSessionData(data, 'inception')}
-            sessionId={session.id}
-          />
-        );
-      case 'pbb':
-        return (
-          <ProductBacklogBuilding
-            data={stageData}
-            onSave={(data) => updateSessionData(data, 'pbb')}
-            sessionId={session.id}
-          />
-        );
-      case 'sprint0':
-        return (
-          <Sprint0
-            data={stageData}
-            onSave={(data) => updateSessionData(data, 'sprint0')}
-            sessionId={session.id}
-          />
-        );
-      default:
-        return null;
-    }
-  };
 
   if (loading) {
     return (
@@ -326,98 +190,27 @@ export default function SmartDiscovery() {
     );
   }
 
-  // Show specific session
+  // Show specific session using ConversationalDiscovery
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
+    <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <Button variant="outline" onClick={() => navigate('/smart-hub/discovery')}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">{session?.session_name}</h1>
-            <p className="text-muted-foreground">Discovery Inteligente</p>
+            <h1 className="text-2xl font-bold">Discovery Inteligente</h1>
+            <p className="text-muted-foreground">
+              Modo Conversacional com IA
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Upload className="h-4 w-4 mr-2" />
-            Exportar
-          </Button>
-        </div>
       </div>
 
-      {/* Progress */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Progresso da Sessão</h3>
-              <span className="text-sm text-muted-foreground">
-                {currentStageIndex + 1} de {STAGES.length}
-              </span>
-            </div>
-            
-            <Progress value={((currentStageIndex + 1) / STAGES.length) * 100} className="h-2" />
-            
-            <div className="grid grid-cols-4 gap-2">
-              {STAGES.map((stage, index) => {
-                const Icon = stage.icon;
-                const isActive = index === currentStageIndex;
-                const isCompleted = index < currentStageIndex;
-                
-                return (
-                  <div key={stage.id} 
-                       className={`flex items-center gap-2 p-2 rounded-lg text-xs ${
-                         isActive ? 'bg-primary/10 border border-primary/20' :
-                         isCompleted ? 'bg-success/10' : 'bg-muted/30'
-                       }`}>
-                    {isCompleted ? (
-                      <CheckCircle className="h-4 w-4 text-success" />
-                    ) : (
-                      <Icon className={`h-4 w-4 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                    )}
-                    <span className={isActive ? 'font-medium' : ''}>{stage.name}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Current Stage Content */}
-      <div className="space-y-6">
-        {getStageComponent()}
-      </div>
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
-        <Button 
-          variant="outline" 
-          onClick={prevStage}
-          disabled={currentStageIndex === 0}
-        >
-          Etapa Anterior
-        </Button>
-        
-        <div className="text-sm text-muted-foreground">
-          {STAGES[currentStageIndex]?.name}
-        </div>
-        
-        {currentStageIndex < STAGES.length - 1 ? (
-          <Button onClick={nextStage}>
-            Próxima Etapa
-          </Button>
-        ) : (
-          <Button variant="default">
-            <Download className="h-4 w-4 mr-2" />
-            Finalizar e Exportar
-          </Button>
-        )}
-      </div>
+      {/* Conversational Discovery Component */}
+      <ConversationalDiscovery sessionId={sessionId} />
     </div>
   );
 }

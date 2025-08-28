@@ -43,7 +43,11 @@ interface DiscoverySession {
   generated_backlog: any;
 }
 
-export default function ConversationalDiscovery() {
+interface ConversationalDiscoveryProps {
+  sessionId?: string;
+}
+
+export default function ConversationalDiscovery({ sessionId }: ConversationalDiscoveryProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -51,15 +55,61 @@ export default function ConversationalDiscovery() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [sessionName, setSessionName] = useState('');
   const [currentSession, setCurrentSession] = useState<DiscoverySession | null>(null);
-  const [showNewSession, setShowNewSession] = useState(!currentSession);
+  const [showNewSession, setShowNewSession] = useState(!sessionId && !currentSession);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
+  useEffect(() => {
+    if (sessionId) {
+      loadExistingSession();
+    }
+  }, [sessionId]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const loadExistingSession = async () => {
+    if (!sessionId || !user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('smart_discovery_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (error) throw error;
+      
+      setCurrentSession(data);
+      setShowNewSession(false);
+      
+      // Add welcome message for existing session
+      const welcomeMessage: ChatMessage = {
+        id: 'welcome-existing',
+        role: 'assistant',
+        content: `Olá! Continuando sua sessão de Discovery "${data.session_name}".
+        
+Estamos na etapa: **${getStageName(data.current_stage)}**
+
+Como posso ajudá-lo a continuar o desenvolvimento do seu projeto?`,
+        timestamp: new Date()
+      };
+      
+      setMessages([welcomeMessage]);
+      
+    } catch (error: any) {
+      console.error('Error loading session:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar sessão: " + error.message,
+        variant: "destructive"
+      });
+    }
   };
 
   const createNewSession = async () => {
