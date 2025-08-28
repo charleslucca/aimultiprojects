@@ -94,6 +94,88 @@ export type Database = {
           },
         ]
       }
+      collaborative_sessions: {
+        Row: {
+          action_items: Json | null
+          client_id: string | null
+          created_at: string | null
+          duration_minutes: number | null
+          facilitator_id: string
+          id: string
+          insights_generated: Json | null
+          participants: Json | null
+          project_id: string | null
+          scheduled_for: string | null
+          session_data: Json | null
+          session_name: string
+          session_template: Json | null
+          session_type: string
+          status: string | null
+          transcription_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          action_items?: Json | null
+          client_id?: string | null
+          created_at?: string | null
+          duration_minutes?: number | null
+          facilitator_id: string
+          id?: string
+          insights_generated?: Json | null
+          participants?: Json | null
+          project_id?: string | null
+          scheduled_for?: string | null
+          session_data?: Json | null
+          session_name: string
+          session_template?: Json | null
+          session_type: string
+          status?: string | null
+          transcription_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          action_items?: Json | null
+          client_id?: string | null
+          created_at?: string | null
+          duration_minutes?: number | null
+          facilitator_id?: string
+          id?: string
+          insights_generated?: Json | null
+          participants?: Json | null
+          project_id?: string | null
+          scheduled_for?: string | null
+          session_data?: Json | null
+          session_name?: string
+          session_template?: Json | null
+          session_type?: string
+          status?: string | null
+          transcription_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "collaborative_sessions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborative_sessions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "collaborative_sessions_transcription_id_fkey"
+            columns: ["transcription_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_transcriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultation_sessions: {
         Row: {
           action_plan: Json | null
@@ -248,6 +330,83 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "smart_discovery_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      executive_reports: {
+        Row: {
+          content: Json
+          created_at: string
+          date_range: Json
+          generated_by: string
+          id: string
+          metadata: Json | null
+          project_ids: string[] | null
+          report_type: string
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          date_range?: Json
+          generated_by: string
+          id?: string
+          metadata?: Json | null
+          project_ids?: string[] | null
+          report_type: string
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          date_range?: Json
+          generated_by?: string
+          id?: string
+          metadata?: Json | null
+          project_ids?: string[] | null
+          report_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      insight_alerts: {
+        Row: {
+          alert_message: string
+          alert_type: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          insight_id: string
+          is_read: boolean | null
+          target_users: string[] | null
+        }
+        Insert: {
+          alert_message: string
+          alert_type: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          insight_id: string
+          is_read?: boolean | null
+          target_users?: string[] | null
+        }
+        Update: {
+          alert_message?: string
+          alert_type?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          insight_id?: string
+          is_read?: boolean | null
+          target_users?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insight_alerts_insight_id_fkey"
+            columns: ["insight_id"]
+            isOneToOne: false
+            referencedRelation: "unified_insights"
             referencedColumns: ["id"]
           },
         ]
@@ -660,6 +819,131 @@ export type Database = {
             columns: ["config_id"]
             isOneToOne: false
             referencedRelation: "jira_configurations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meeting_transcriptions: {
+        Row: {
+          action_items: Json | null
+          ai_summary: string | null
+          audio_file_path: string | null
+          client_id: string | null
+          created_at: string | null
+          created_by: string
+          id: string
+          key_decisions: Json | null
+          language_detected: string | null
+          meeting_name: string
+          processing_status: string | null
+          project_id: string | null
+          sentiment_analysis: Json | null
+          session_id: string | null
+          session_type: string
+          speakers: Json | null
+          timestamps: Json | null
+          transcription_quality: number | null
+          transcription_text: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          action_items?: Json | null
+          ai_summary?: string | null
+          audio_file_path?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          created_by: string
+          id?: string
+          key_decisions?: Json | null
+          language_detected?: string | null
+          meeting_name: string
+          processing_status?: string | null
+          project_id?: string | null
+          sentiment_analysis?: Json | null
+          session_id?: string | null
+          session_type: string
+          speakers?: Json | null
+          timestamps?: Json | null
+          transcription_quality?: number | null
+          transcription_text?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          action_items?: Json | null
+          ai_summary?: string | null
+          audio_file_path?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          key_decisions?: Json | null
+          language_detected?: string | null
+          meeting_name?: string
+          processing_status?: string | null
+          project_id?: string | null
+          sentiment_analysis?: Json | null
+          session_id?: string | null
+          session_type?: string
+          speakers?: Json | null
+          timestamps?: Json | null
+          transcription_quality?: number | null
+          transcription_text?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meeting_transcriptions_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meeting_transcriptions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_rules: {
+        Row: {
+          alert_levels: string[] | null
+          created_at: string | null
+          id: string
+          insight_types: string[] | null
+          is_active: boolean | null
+          notification_channels: string[] | null
+          project_id: string | null
+          user_id: string
+        }
+        Insert: {
+          alert_levels?: string[] | null
+          created_at?: string | null
+          id?: string
+          insight_types?: string[] | null
+          is_active?: boolean | null
+          notification_channels?: string[] | null
+          project_id?: string | null
+          user_id: string
+        }
+        Update: {
+          alert_levels?: string[] | null
+          created_at?: string | null
+          id?: string
+          insight_types?: string[] | null
+          is_active?: boolean | null
+          notification_channels?: string[] | null
+          project_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_rules_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -1360,6 +1644,47 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transcription_annotations: {
+        Row: {
+          annotation_type: string
+          content: string
+          created_at: string | null
+          created_by: string
+          id: string
+          timestamp_end: number | null
+          timestamp_start: number
+          transcription_id: string
+        }
+        Insert: {
+          annotation_type: string
+          content: string
+          created_at?: string | null
+          created_by: string
+          id?: string
+          timestamp_end?: number | null
+          timestamp_start: number
+          transcription_id: string
+        }
+        Update: {
+          annotation_type?: string
+          content?: string
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          timestamp_end?: number | null
+          timestamp_start?: number
+          transcription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transcription_annotations_transcription_id_fkey"
+            columns: ["transcription_id"]
+            isOneToOne: false
+            referencedRelation: "meeting_transcriptions"
             referencedColumns: ["id"]
           },
         ]
