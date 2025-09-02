@@ -29,8 +29,23 @@ serve(async (req) => {
   }
 
   try {
-    const { action, integration_id, config } = await req.json();
+    const requestBody = await req.json();
+    console.log('=== AZURE BOARDS SYNC DEBUG ===');
+    console.log('Full request body:', JSON.stringify(requestBody, null, 2));
+    
+    const { action, integration_id, config } = requestBody;
     console.log(`Starting Azure Boards sync action: ${action} for integration: ${integration_id}`);
+    
+    if (config) {
+      console.log('Config provided in request:', {
+        organization: config.organization,
+        project: config.project,
+        project_name: config.project_name,
+        has_token: !!config.personal_access_token || !!config.personalAccessToken,
+        area_paths: config.area_paths,
+        areaPaths: config.areaPaths
+      });
+    }
 
     switch (action) {
       case 'sync_integration':
@@ -42,6 +57,7 @@ serve(async (req) => {
     }
   } catch (error: any) {
     console.error('Error in azure-boards-sync:', error);
+    console.error('Error stack:', error.stack);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
@@ -53,49 +69,87 @@ serve(async (req) => {
 });
 
 async function testConnection(config: AzureDevOpsConfig) {
-  console.log('Testing Azure DevOps connection...');
+  console.log('=== TESTING AZURE DEVOPS CONNECTION ===');
+  console.log('Config received:', {
+    provided: !!config,
+    organization: config?.organization,
+    has_personal_access_token: !!config?.personal_access_token,
+    has_personalAccessToken: !!config?.personalAccessToken,
+    project: config?.project,
+    project_name: config?.project_name
+  });
   
   if (!config) {
+    console.error('ERROR: No configuration provided');
     throw new Error('Configuration is required');
   }
   
   const { organization } = config;
   const personalAccessToken = config.personal_access_token || config.personalAccessToken;
   
+  console.log('Extracted values:', {
+    organization,
+    has_token: !!personalAccessToken,
+    token_length: personalAccessToken?.length
+  });
+  
   if (!organization || !personalAccessToken) {
+    console.error('ERROR: Missing required fields:', {
+      organization: !!organization,
+      personalAccessToken: !!personalAccessToken
+    });
     throw new Error('Organization and personal access token are required');
   }
   
   const url = `https://dev.azure.com/${organization}/_apis/projects?api-version=7.0`;
+  console.log('Making request to URL:', url);
   
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Basic ${btoa(':' + personalAccessToken)}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Basic ${btoa(':' + personalAccessToken)}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Azure DevOps connection failed: ${response.status} ${response.statusText}`);
+    console.log('Response status:', response.status);
+    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Azure API Error Response:', errorText);
+      throw new Error(`Azure DevOps connection failed: ${response.status} ${response.statusText}. Details: ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log(`Connection successful. Found ${data.count} projects.`);
+    console.log('Project names:', data.value?.map((p: any) => p.name).slice(0, 5));
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        message: `Connection successful. Found ${data.count} projects.`,
+        projects: data.value?.slice(0, 5) // Return first 5 projects as sample
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error: any) {
+    console.error('Test connection failed:', error);
+    throw error;
   }
-
-  const data = await response.json();
-  console.log(`Connection successful. Found ${data.count} projects.`);
-
-  return new Response(
-    JSON.stringify({ 
-      success: true, 
-      message: `Connection successful. Found ${data.count} projects.`,
-      projects: data.value?.slice(0, 5) // Return first 5 projects as sample
-    }),
-    { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
 }
 
 async function syncIntegration(integration_id: string, config?: AzureDevOpsConfig) {
-  console.log(`Syncing Azure DevOps integration: ${integration_id}`);
+  console.log('=== SYNCING AZURE DEVOPS INTEGRATION ===');
+  console.log(`Integration ID: ${integration_id}`);
+  console.log('Config provided in sync call:', {
+    provided: !!config,
+    organization: config?.organization,
+    has_token: !!config?.personal_access_token || !!config?.personalAccessToken
+  });
   
   // Get integration details to get configuration if not provided
+  console.log('Fetching integration from database...');
   const { data: integration, error: integrationError } = await supabase
     .from('project_integrations')
     .select('*')
@@ -103,24 +157,55 @@ async function syncIntegration(integration_id: string, config?: AzureDevOpsConfi
     .single();
 
   if (integrationError) {
+    console.error('Failed to fetch integration:', integrationError);
     throw new Error(`Failed to get integration: ${integrationError.message}`);
   }
+
+  console.log('Integration found:', {
+    id: integration.id,
+    project_id: integration.project_id,
+    integration_type: integration.integration_type,
+    has_configuration: !!integration.configuration,
+    configuration_keys: integration.configuration ? Object.keys(integration.configuration) : []
+  });
 
   // Use provided config or get from integration
   const finalConfig = config || integration.configuration;
   if (!finalConfig) {
+    console.error('ERROR: No configuration available');
     throw new Error('No configuration found for integration');
   }
+
+  console.log('Final configuration:', {
+    organization: finalConfig.organization,
+    project: finalConfig.project,
+    project_name: finalConfig.project_name,
+    has_personal_access_token: !!finalConfig.personal_access_token,
+    has_personalAccessToken: !!finalConfig.personalAccessToken,
+    area_paths: finalConfig.area_paths,
+    areaPaths: finalConfig.areaPaths
+  });
 
   const organization = finalConfig.organization;
   const project = finalConfig.project || finalConfig.project_name;
   const personalAccessToken = finalConfig.personal_access_token || finalConfig.personalAccessToken;
   
+  console.log('Extracted sync values:', {
+    organization,
+    project,
+    has_token: !!personalAccessToken,
+    token_length: personalAccessToken?.length
+  });
+  
   if (!organization || !personalAccessToken) {
+    console.error('ERROR: Missing required sync fields:', {
+      organization: !!organization,
+      personalAccessToken: !!personalAccessToken
+    });
     throw new Error('Organization and personal access token are required');
   }
   
-  console.log(`Organization: ${organization}, Project: ${project}`);
+  console.log(`Starting sync - Organization: ${organization}, Project: ${project || 'ALL PROJECTS'}`);
 
   // Sync organization data
   await syncOrganization(integration_id, organization, personalAccessToken);
@@ -229,7 +314,12 @@ async function syncProject(integration_id: string, organization: string, project
 }
 
 async function syncWorkItems(integration_id: string, organization: string, project: string | undefined, token: string, areaPaths?: string[] | string) {
-  console.log(`Syncing work items for project: ${project || 'all projects'}`);
+  console.log('=== SYNCING WORK ITEMS ===');
+  console.log(`Integration ID: ${integration_id}`);
+  console.log(`Organization: ${organization}`);
+  console.log(`Project: ${project || 'ALL PROJECTS'}`);
+  console.log(`Token length: ${token?.length}`);
+  console.log(`Area paths provided: ${areaPaths}`);
   
   // Get integration details to check for area paths
   const { data: integration } = await supabase
@@ -286,6 +376,10 @@ async function syncWorkItems(integration_id: string, organization: string, proje
     `
   };
 
+  console.log('WIQL URL:', wiqlUrl);
+  console.log('WIQL Query:', wiqlQuery.query);
+  console.log('Authorization header present:', !!token);
+  
   const wiqlResponse = await fetch(wiqlUrl, {
     method: 'POST',
     headers: {
@@ -295,18 +389,26 @@ async function syncWorkItems(integration_id: string, organization: string, proje
     body: JSON.stringify(wiqlQuery)
   });
 
+  console.log('WIQL Response status:', wiqlResponse.status);
+  console.log('WIQL Response headers:', Object.fromEntries(wiqlResponse.headers.entries()));
+
   if (!wiqlResponse.ok) {
     const errorBody = await wiqlResponse.text();
-    console.error(`WIQL Query failed:`, wiqlQuery.query);
+    console.error(`WIQL Query failed with status ${wiqlResponse.status}:`);
+    console.error(`Query:`, wiqlQuery.query);
     console.error(`Error response:`, errorBody);
+    console.error(`Request URL:`, wiqlUrl);
     throw new Error(`Failed to query work items: ${wiqlResponse.status} ${wiqlResponse.statusText}. Error: ${errorBody}`);
   }
 
   const wiqlResult = await wiqlResponse.json();
+  console.log('WIQL Result:', JSON.stringify(wiqlResult, null, 2));
+  
   const workItemIds = wiqlResult.workItems?.map((wi: any) => wi.id) || [];
+  console.log(`Found ${workItemIds.length} work items:`, workItemIds.slice(0, 10));
   
   if (workItemIds.length === 0) {
-    console.log('No work items found');
+    console.log('No work items found - this might be normal if the project has no work items');
     return;
   }
 
