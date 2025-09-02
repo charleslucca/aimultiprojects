@@ -370,9 +370,8 @@ async function syncWorkItems(integration_id: string, organization: string, proje
       SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State], [System.AssignedTo], 
              [System.CreatedBy], [System.AreaPath], [System.IterationPath], [Microsoft.VSTS.Scheduling.StoryPoints],
              [Microsoft.VSTS.Scheduling.OriginalEstimate], [Microsoft.VSTS.Scheduling.RemainingWork], 
-             [Microsoft.VSTS.Scheduling.CompletedWork], [System.Priority], [Microsoft.VSTS.Common.Severity],
-             [System.Tags], [System.Parent], [System.CreatedDate], [System.ChangedDate], 
-             [Microsoft.VSTS.Common.ResolvedDate], [Microsoft.VSTS.Common.ClosedDate]
+             [Microsoft.VSTS.Scheduling.CompletedWork], [System.Tags], [System.Parent], 
+             [System.CreatedDate], [System.ChangedDate]
         FROM WorkItems 
         WHERE ${whereClause}
         ORDER BY [System.ChangedDate] DESC
