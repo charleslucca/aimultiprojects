@@ -100,13 +100,24 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
     }
 
     // Validate required fields based on integration type
-    if (selectedType === 'jira' && (!config.url || !config.username || !config.token)) {
-      toast({
-        title: 'Campos obrigatórios',
-        description: 'Preencha URL, usuário e token para integração Jira',
-        variant: 'destructive',
-      });
-      return;
+    if (selectedType === 'jira') {
+      if (!config.url || !config.username || !config.token) {
+        toast({
+          title: 'Campos obrigatórios',
+          description: 'Preencha URL, usuário e token para integração Jira',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (!testResult.success) {
+        toast({
+          title: 'Teste de conexão obrigatório',
+          description: 'Execute o teste de conexão com sucesso antes de salvar',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     if (selectedType === 'azure_boards') {
@@ -162,6 +173,56 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
         description: error.message,
         variant: 'destructive',
       });
+    }
+  };
+
+  const testJiraConnection = async () => {
+    if (!config.url || !config.username || !config.token) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha URL, usuário e token antes de testar',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsTestingConnection(true);
+    setTestResult({});
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('jira-connection-test', {
+        body: { 
+          config: {
+            url: config.url,
+            username: config.username,
+            token: config.token,
+            projectKeys: config.projectKeys ? config.projectKeys.split(',').map(k => k.trim()).filter(k => k) : []
+          }
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Erro ao testar conexão: ${error.message}`);
+      }
+      
+      if (data?.success) {
+        setTestResult({ success: true, message: data.message });
+        toast({
+          title: 'Conexão bem-sucedida',
+          description: 'Conexão com Jira estabelecida com sucesso',
+        });
+      } else {
+        throw new Error(data?.message || 'Falha na conexão com Jira');
+      }
+    } catch (error: any) {
+      setTestResult({ success: false, message: error.message });
+      toast({
+        title: 'Erro na conexão',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTestingConnection(false);
     }
   };
 
@@ -342,27 +403,135 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
               <Input
                 id="jira-url"
                 value={config.url || ''}
-                onChange={(e) => setConfig({ ...config, url: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, url: e.target.value });
+                  setTestResult({});
+                }}
                 placeholder="https://empresa.atlassian.net"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                URL completa da sua instância Jira (ex: https://empresa.atlassian.net)
+              </p>
             </div>
+            
             <div>
-              <Label htmlFor="jira-username">Usuário</Label>
+              <Label htmlFor="jira-username">Usuário (Email) *</Label>
               <Input
                 id="jira-username"
                 value={config.username || ''}
-                onChange={(e) => setConfig({ ...config, username: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, username: e.target.value });
+                  setTestResult({});
+                }}
                 placeholder="seu-email@empresa.com"
               />
             </div>
+
             <div>
-              <Label htmlFor="jira-token">API Token</Label>
+              <Label htmlFor="jira-project-keys">Chaves dos Projetos</Label>
+              <Input
+                id="jira-project-keys"
+                value={config.projectKeys || ''}
+                onChange={(e) => {
+                  setConfig({ ...config, projectKeys: e.target.value });
+                  setTestResult({});
+                }}
+                placeholder="PROJ1, PROJ2, PROJ3"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Chaves dos projetos para sincronizar (separados por vírgula). Deixe vazio para todos.
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="jira-token">API Token *</Label>
               <Input
                 id="jira-token"
                 type="password"
                 value={config.token || ''}
-                onChange={(e) => setConfig({ ...config, token: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, token: e.target.value });
+                  setTestResult({});
+                }}
                 placeholder="Seu token de API do Jira"
+              />
+              
+              <Collapsible open={showPATInstructions} onOpenChange={setShowPATInstructions}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="mt-2 p-0 h-auto text-xs text-muted-foreground hover:text-foreground">
+                    {showPATInstructions ? <ChevronDown className="h-3 w-3 mr-1" /> : <ChevronRight className="h-3 w-3 mr-1" />}
+                    Como obter o API Token do Jira?
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2 space-y-2">
+                  <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg space-y-2">
+                    <p className="font-medium">Passos para criar um API Token:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Acesse <strong>Gerenciar conta Atlassian</strong></li>
+                      <li>Vá para <strong>Segurança</strong> → <strong>API tokens</strong></li>
+                      <li>Clique em <strong>Criar API token</strong></li>
+                      <li>Dê um nome ao token (ex: "Integração Smart Hub")</li>
+                      <li>Clique em <strong>Criar</strong></li>
+                      <li>Copie o token gerado (você não poderá vê-lo novamente)</li>
+                    </ol>
+                    <div className="flex items-center gap-2 pt-2 border-t border-border">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => window.open('https://id.atlassian.com/manage-profile/security/api-tokens', '_blank')}
+                        className="text-xs"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Criar API Token
+                      </Button>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  onClick={testJiraConnection}
+                  disabled={isTestingConnection || !config.url || !config.username || !config.token}
+                  className="flex items-center gap-2"
+                >
+                  {isTestingConnection ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  {isTestingConnection ? 'Testando...' : 'Testar Conexão'}
+                </Button>
+                
+                {testResult.success !== undefined && (
+                  <Badge variant={testResult.success ? 'default' : 'destructive'}>
+                    {testResult.success ? 'Conexão OK' : 'Falhou'}
+                  </Badge>
+                )}
+              </div>
+              
+              {testResult.message && (
+                <p className={`text-xs whitespace-pre-line ${testResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {testResult.message}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <Label htmlFor="auto-sync-jira" className="font-medium">Sincronização Automática</Label>
+                <p className="text-xs text-muted-foreground">
+                  Sincronizar dados automaticamente a cada hora
+                </p>
+              </div>
+              <Switch
+                id="auto-sync-jira"
+                checked={config.autoSync !== false}
+                onCheckedChange={(checked) => setConfig({ ...config, autoSync: checked })}
               />
             </div>
           </>
