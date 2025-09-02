@@ -179,9 +179,27 @@ export const GitHubBoard: React.FC<GitHubBoardProps> = ({ projectId }) => {
       <div className="text-center py-8">
         <Code className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
         <h3 className="text-lg font-medium">Nenhum repositório encontrado</h3>
-        <p className="text-sm text-muted-foreground">
-          Configure uma integração GitHub para ver os insights de código.
+        <p className="text-sm text-muted-foreground mb-4">
+          {integrationId ? 
+            'Execute uma sincronização para carregar os dados do GitHub.' :
+            'Configure uma integração GitHub para ver os insights de código.'
+          }
         </p>
+        {integrationId && (
+          <Button onClick={handleSync} disabled={syncing}>
+            {syncing ? (
+              <>
+                <Activity className="h-4 w-4 mr-2 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <GitBranch className="h-4 w-4 mr-2" />
+                Sincronizar Agora
+              </>
+            )}
+          </Button>
+        )}
       </div>
     );
   }
@@ -196,19 +214,28 @@ export const GitHubBoard: React.FC<GitHubBoardProps> = ({ projectId }) => {
             Análise e métricas dos repositórios de código
           </p>
         </div>
-        <Button onClick={handleSync} disabled={syncing}>
-          {syncing ? (
-            <>
-              <Activity className="h-4 w-4 mr-2 animate-spin" />
-              Sincronizando...
-            </>
-          ) : (
-            <>
-              <GitBranch className="h-4 w-4 mr-2" />
-              Sincronizar
-            </>
+        <div className="flex items-center gap-3">
+          {integrationId && (
+            <div className="text-sm text-muted-foreground">
+              {repositories.length > 0 && (
+                <span>Última sync: {new Date().toLocaleString('pt-BR')}</span>
+              )}
+            </div>
           )}
-        </Button>
+          <Button onClick={handleSync} disabled={syncing}>
+            {syncing ? (
+              <>
+                <Activity className="h-4 w-4 mr-2 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <GitBranch className="h-4 w-4 mr-2" />
+                Sincronizar
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Repository Cards */}

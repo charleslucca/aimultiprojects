@@ -447,6 +447,17 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
           title: 'Sincronização iniciada',
           description: 'Os dados do Azure Boards estão sendo sincronizados',
         });
+      } else if (integration.integration_type === 'github') {
+        const { data, error } = await supabase.functions.invoke('github-sync', {
+          body: { integrationId: integration.id }
+        });
+        
+        if (error) throw error;
+        
+        toast({
+          title: 'Sincronização iniciada',
+          description: 'Os dados do GitHub estão sendo sincronizados',
+        });
       }
       
       loadIntegrations();
