@@ -303,22 +303,31 @@ async function performSecurityAnalysis(supabaseClient: any, openAIApiKey: string
     const insertData = {
       project_id: projectId,
       insight_type: 'github_security',
-      confidence_score: analysis.security_score || 0.8,
-      insight_data: {
+      source_type: 'github',
+      title: 'Análise de Segurança do Código',
+      content: JSON.stringify({
         ...analysis,
         analysis_type: 'security',
         repositories_analyzed: repositories.length,
         commits_analyzed: commits?.length || 0,
         prs_analyzed: pullRequests?.length || 0
+      }),
+      metadata: {
+        executive_summary: executiveSummary,
+        alert_category: analysis.critical_alerts?.length > 0 ? 'SECURITY' : 'GENERAL',
+        repositories_count: repositories.length,
+        commits_count: commits?.length || 0,
+        prs_count: pullRequests?.length || 0
       },
-      executive_summary: executiveSummary,
-      alert_category: analysis.critical_alerts?.length > 0 ? 'SECURITY' : 'GENERAL',
-      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+      confidence_score: analysis.security_score || 0.8,
+      criticality_score: analysis.critical_alerts?.length > 0 ? 0.9 : 0.3,
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      source_origin: 'github-ai-insights'
     };
-    console.log('💾 Insert data prepared:', { ...insertData, insight_data: 'REDACTED', executive_summary: 'REDACTED' });
+    console.log('💾 Insert data prepared:', { ...insertData, content: 'REDACTED' });
 
     const { data: insertResult, error } = await supabaseClient
-      .from('jira_ai_insights')
+      .from('unified_insights')
       .insert(insertData)
       .select();
 
@@ -412,22 +421,27 @@ async function performCodeQualityAssessment(supabaseClient: any, openAIApiKey: s
   try {
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um arquiteto de software sênior.');
 
-    await supabaseClient
-      .from('jira_ai_insights')
-      .insert({
-        project_id: projectId,
-        insight_type: 'github_quality',
-        confidence_score: analysis.quality_score || 0.7,
-        insight_data: {
-          ...analysis,
-          analysis_type: 'code_quality',
-          repositories_count: repositories?.length || 0,
-          commits_analyzed: commits?.length || 0
-        },
-        executive_summary: generateQualitySummary(analysis),
-        alert_category: analysis.critical_issues?.length > 0 ? 'QUALITY' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      });
+      await supabaseClient
+        .from('unified_insights')
+        .insert({
+          project_id: projectId,
+          insight_type: 'github_quality',
+          source_type: 'github',
+          title: 'Avaliação de Qualidade do Código',
+          content: JSON.stringify({
+            ...analysis,
+            analysis_type: 'code_quality',
+            repositories_count: repositories?.length || 0,
+            commits_analyzed: commits?.length || 0
+          }),
+          metadata: {
+            executive_summary: generateQualitySummary(analysis),
+            alert_category: analysis.critical_issues?.length > 0 ? 'QUALITY' : 'GENERAL'
+          },
+          confidence_score: analysis.quality_score || 0.7,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          source_origin: 'github-ai-insights'
+        });
 
     console.log('Code quality assessment completed');
     return analysis;
@@ -491,20 +505,25 @@ async function performTestCoverageAnalysis(supabaseClient: any, openAIApiKey: st
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um QA Engineer experiente.');
 
     await supabaseClient
-      .from('jira_ai_insights')
+      .from('unified_insights')
       .insert({
         project_id: projectId,
         insight_type: 'github_testing',
-        confidence_score: analysis.test_coverage_estimated || 0.6,
-        insight_data: {
+        source_type: 'github',
+        title: 'Análise de Cobertura de Testes',
+        content: JSON.stringify({
           ...analysis,
           analysis_type: 'test_coverage',
           total_commits: commits?.length || 0,
           test_commits: testCommits.length
+        }),
+        metadata: {
+          executive_summary: generateTestingSummary(analysis),
+          alert_category: analysis.critical_gaps?.length > 0 ? 'TESTING' : 'GENERAL'
         },
-        executive_summary: generateTestingSummary(analysis),
-        alert_category: analysis.critical_gaps?.length > 0 ? 'TESTING' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        confidence_score: analysis.test_coverage_estimated || 0.6,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        source_origin: 'github-ai-insights'
       });
 
     console.log('Test coverage analysis completed');
@@ -582,21 +601,26 @@ async function performPerformanceAnalysis(supabaseClient: any, openAIApiKey: str
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um especialista em otimização de performance.');
 
     await supabaseClient
-      .from('jira_ai_insights')
+      .from('unified_insights')
       .insert({
         project_id: projectId,
         insight_type: 'github_performance',
-        confidence_score: analysis.performance_score || 0.7,
-        insight_data: {
+        source_type: 'github',
+        title: 'Análise de Performance',
+        content: JSON.stringify({
           ...analysis,
           analysis_type: 'performance',
           performance_commits: performanceCommits.length,
           large_commits: largeCommits.length,
           total_commits: commits?.length || 0
+        }),
+        metadata: {
+          executive_summary: generatePerformanceSummary(analysis),
+          alert_category: analysis.performance_risks?.some((r: any) => r.severity === 'CRITICAL') ? 'PERFORMANCE' : 'GENERAL'
         },
-        executive_summary: generatePerformanceSummary(analysis),
-        alert_category: analysis.performance_risks?.some((r: any) => r.severity === 'CRITICAL') ? 'PERFORMANCE' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        confidence_score: analysis.performance_score || 0.7,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        source_origin: 'github-ai-insights'
       });
 
     console.log('Performance analysis completed');
@@ -627,27 +651,32 @@ async function performPipelineHealthAnalysis(supabaseClient: any, openAIApiKey: 
   if (!workflows || workflows.length === 0) {
     console.log('No workflows found for pipeline analysis');
     // Create a basic insight about missing CI/CD
-    await supabaseClient
-      .from('jira_ai_insights')
-      .insert({
-        project_id: projectId,
-        insight_type: 'github_pipeline',
-        confidence_score: 0.9,
-        insight_data: {
-          analysis_type: 'pipeline_health',
-          pipeline_status: 'NOT_CONFIGURED',
-          critical_issues: [{
-            type: 'missing_cicd',
-            severity: 'HIGH',
-            title: 'CI/CD não configurado',
-            description: 'Nenhum workflow de CI/CD foi encontrado no repositório',
-            recommendations: ['Configurar GitHub Actions', 'Implementar testes automatizados', 'Configurar deploy automático']
-          }]
-        },
-        executive_summary: '⚠️ ATENÇÃO: Projeto sem CI/CD configurado - Riscos de qualidade e deploy',
-        alert_category: 'PIPELINE',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      });
+      await supabaseClient
+        .from('unified_insights')
+        .insert({
+          project_id: projectId,
+          insight_type: 'github_pipeline',
+          source_type: 'github',
+          title: 'Status do Pipeline CI/CD',
+          content: JSON.stringify({
+            analysis_type: 'pipeline_health',
+            pipeline_status: 'NOT_CONFIGURED',
+            critical_issues: [{
+              type: 'missing_cicd',
+              severity: 'HIGH',
+              title: 'CI/CD não configurado',
+              description: 'Nenhum workflow de CI/CD foi encontrado no repositório',
+              recommendations: ['Configurar GitHub Actions', 'Implementar testes automatizados', 'Configurar deploy automático']
+            }]
+          }),
+          metadata: {
+            executive_summary: '⚠️ ATENÇÃO: Projeto sem CI/CD configurado - Riscos de qualidade e deploy',
+            alert_category: 'PIPELINE'
+          },
+          confidence_score: 0.9,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          source_origin: 'github-ai-insights'
+        });
     return;
   }
 
@@ -704,21 +733,26 @@ async function performPipelineHealthAnalysis(supabaseClient: any, openAIApiKey: 
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um especialista em DevOps e CI/CD.');
 
     await supabaseClient
-      .from('jira_ai_insights')
+      .from('unified_insights')
       .insert({
         project_id: projectId,
         insight_type: 'github_pipeline',
-        confidence_score: analysis.pipeline_health_score || 0.8,
-        insight_data: {
+        source_type: 'github',
+        title: 'Saúde do Pipeline CI/CD',
+        content: JSON.stringify({
           ...analysis,
           analysis_type: 'pipeline_health',
           workflows_count: workflows.length,
           recent_runs: workflowRuns?.length || 0,
           success_rate: successRate
+        }),
+        metadata: {
+          executive_summary: generatePipelineSummary(analysis, successRate),
+          alert_category: analysis.pipeline_issues?.some((i: any) => i.severity === 'CRITICAL') ? 'PIPELINE' : 'GENERAL'
         },
-        executive_summary: generatePipelineSummary(analysis, successRate),
-        alert_category: analysis.pipeline_issues?.some((i: any) => i.severity === 'CRITICAL') ? 'PIPELINE' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        confidence_score: analysis.pipeline_health_score || 0.8,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        source_origin: 'github-ai-insights'
       });
 
     console.log('Pipeline health analysis completed');
@@ -815,22 +849,27 @@ async function performDevPerformanceAnalysis(supabaseClient: any, openAIApiKey: 
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um tech lead experiente.');
 
     await supabaseClient
-      .from('jira_ai_insights')
+      .from('unified_insights')
       .insert({
         project_id: projectId,
         insight_type: 'github_dev_performance',
-        confidence_score: analysis.development_velocity_score || 0.7,
-        insight_data: {
+        source_type: 'github',
+        title: 'Performance de Desenvolvimento',
+        content: JSON.stringify({
           ...analysis,
           analysis_type: 'dev_performance',
           commits_per_day: commitsPerDay,
           contributor_balance: contributorBalance,
           total_contributors: contributors?.length || 0,
           recent_activity: recentCommits.length
+        }),
+        metadata: {
+          executive_summary: generateDevPerformanceSummary(analysis, commitsPerDay),
+          alert_category: analysis.performance_alerts?.some((a: any) => a.severity === 'CRITICAL') ? 'DEV_PERFORMANCE' : 'GENERAL'
         },
-        executive_summary: generateDevPerformanceSummary(analysis, commitsPerDay),
-        alert_category: analysis.performance_alerts?.some((a: any) => a.severity === 'CRITICAL') ? 'DEV_PERFORMANCE' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        confidence_score: analysis.development_velocity_score || 0.7,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        source_origin: 'github-ai-insights'
       });
 
     console.log('Development performance analysis completed');
@@ -940,21 +979,26 @@ async function performReleasePredictionAnalysis(supabaseClient: any, openAIApiKe
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um release manager experiente.');
 
     await supabaseClient
-      .from('jira_ai_insights')
+      .from('unified_insights')
       .insert({
         project_id: projectId,
         insight_type: 'github_release_prediction',
-        confidence_score: analysis.next_release_prediction?.confidence || 0.6,
-        insight_data: {
+        source_type: 'github',
+        title: 'Predição de Release',
+        content: JSON.stringify({
           ...analysis,
           analysis_type: 'release_prediction',
           releases_analyzed: releases?.length || 0,
           commits_since_last_release: commitsSinceLastRelease.length,
           days_since_last_release: daysSinceLastRelease
+        }),
+        metadata: {
+          executive_summary: generateReleaseSummary(analysis, daysSinceLastRelease),
+          alert_category: analysis.release_risks?.some((r: any) => r.severity === 'CRITICAL') ? 'RELEASE' : 'GENERAL'
         },
-        executive_summary: generateReleaseSummary(analysis, daysSinceLastRelease),
-        alert_category: analysis.release_risks?.some((r: any) => r.severity === 'CRITICAL') ? 'RELEASE' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        confidence_score: analysis.next_release_prediction?.confidence || 0.6,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        source_origin: 'github-ai-insights'
       });
 
     console.log('Release prediction analysis completed');

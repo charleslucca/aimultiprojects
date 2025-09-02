@@ -87,15 +87,47 @@ const JiraCockpitProject: React.FC = () => {
 
         // Load AI insights for jira projects AND GitHub insights for this project
         const jiraProjectIds = jiraProjectData.map(jp => jp.id);
-        const { data: insightsData, error: insightsError } = await supabase
+        
+        // Load Jira insights
+        const { data: jiraInsightsData, error: jiraInsightsError } = await supabase
           .from('jira_ai_insights')
           .select('*')
-          .or(`project_id.in.(${jiraProjectIds.join(',')}),project_id.eq.${projectId}`)
+          .in('project_id', jiraProjectIds)
           .order('generated_at', { ascending: false })
-          .limit(100);
+          .limit(50);
 
-        if (insightsError) throw insightsError;
-        setInsights(insightsData || []);
+        if (jiraInsightsError) throw jiraInsightsError;
+
+        // Load GitHub insights from unified_insights
+        const { data: githubInsightsData, error: githubInsightsError } = await supabase
+          .from('unified_insights')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('source_type', 'github')
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (githubInsightsError) throw githubInsightsError;
+
+        // Combine and format insights
+        const combinedInsights = [
+          ...(jiraInsightsData || []).map(insight => ({
+            ...insight,
+            source: 'jira',
+            generated_at: insight.generated_at || insight.created_at
+          })),
+          ...(githubInsightsData || []).map(insight => ({
+            ...insight,
+            source: 'github',
+            generated_at: insight.created_at,
+            insight_data: insight.content ? JSON.parse(insight.content) : {},
+            executive_summary: (insight.metadata && typeof insight.metadata === 'object' && insight.metadata !== null && 'executive_summary' in insight.metadata) 
+              ? String(insight.metadata.executive_summary) 
+              : ''
+          }))
+        ].sort((a, b) => new Date(b.generated_at).getTime() - new Date(a.generated_at).getTime());
+
+        setInsights(combinedInsights);
       }
 
     } catch (error: any) {
