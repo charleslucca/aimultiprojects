@@ -18,22 +18,32 @@ SUAS CAPACIDADES:
 5. **Product Backlog**: Cria User Stories com Definition of Done
 6. **Escopo de Entrega**: Memorial descritivo para contratos
 
+COMPORTAMENTO AUTOMÁTICO COM ARQUIVOS:
+**CRÍTICO**: Quando o usuário anexar arquivos (transcrições, documentos, etc.), você DEVE automaticamente:
+1. Analisar todo o conteúdo dos arquivos anexados
+2. Extrair personas, requisitos e escopo automaticamente
+3. Gerar pelo menos 2-3 artefatos relevantes baseados no conteúdo
+4. Sugerir próximos passos para o projeto
+5. Sempre que possível, gerar Business Model Canvas, Product Backlog E Escopo de Entrega
+
 FORMATO DE RESPOSTA:
 Sempre que possível, gere artefatos estruturados em JSON no seguinte formato:
 {
   "type": "artifact",
-  "artifact_type": "business_model_canvas|product_backlog|delivery_scope",
+  "artifact_type": "business_model_canvas|product_backlog|delivery_scope|personas|requirements",
   "content": {
     // Conteúdo estruturado do artefato
   }
 }
 
 INSTRUÇÕES ESPECIAIS:
-- Seja sempre preciso e baseado em dados
+- **SEMPRE analise arquivos anexados automaticamente** - não espere o usuário pedir
+- Seja sempre preciso e baseado em dados dos arquivos
 - Use linguagem profissional e clara
 - Priorize informações extraídas dos arquivos anexados
-- Quando gerar artefatos, sempre forneça conteúdo detalhado e prático
+- Quando houver arquivos, SEMPRE gere pelo menos uma análise inicial
 - Para User Stories, sempre inclua critérios de aceitação e Definition of Done
+- Se houver transcrição de reunião, extraia automaticamente requisitos e personas
 
 Agora aguarde o usuário anexar documentos ou fazer perguntas sobre seu projeto.`;
 
@@ -56,17 +66,43 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Process attachments if any
+    // Process attachments with their processed content
     let attachmentContext = '';
-    if (attachments.length > 0) {
-      console.log(`Processing ${attachments.length} attachments`);
+    if (attachments && attachments.length > 0) {
+      console.log('Processing', attachments.length, 'attachments');
       
       for (const attachment of attachments) {
-        if (attachment.transcription) {
-          attachmentContext += `\n\n--- CONTEÚDO DO ARQUIVO: ${attachment.file_name} ---\n${attachment.transcription}`;
-        }
-        if (attachment.extracted_content) {
-          attachmentContext += `\n\n--- CONTEÚDO EXTRAÍDO: ${attachment.file_name} ---\n${attachment.extracted_content}`;
+        try {
+          let fileContent = '';
+          
+          // Use processed content if available (transcription from database)
+          if (attachment.transcription) {
+            fileContent = attachment.transcription;
+          } else if (attachment.path || attachment.file_path) {
+            // Fallback to download if no processed content
+            const { data: fileData } = await supabase.storage
+              .from('smart-hub-files')
+              .download(attachment.path || attachment.file_path);
+            
+            if (fileData) {
+              fileContent = await fileData.text();
+            }
+          }
+          
+          if (fileContent) {
+            attachmentContext += `\n\n=== ARQUIVO: ${attachment.name || attachment.file_name} ===\n`;
+            attachmentContext += `Tipo: ${attachment.type || attachment.file_type || 'Desconhecido'}\n`;
+            attachmentContext += `Status: ${attachment.processing_status || 'Processado'}\n`;
+            attachmentContext += `CONTEÚDO:\n${fileContent}`;
+            
+            // Add AI analysis if available
+            if (attachment.ai_analysis) {
+              attachmentContext += `\n\nANÁLISE PRÉVIA:\n${JSON.stringify(attachment.ai_analysis, null, 2)}`;
+            }
+          }
+        } catch (error) {
+          console.error('Error processing attachment:', error);
+          attachmentContext += `\n\n=== ${attachment.name || attachment.file_name} ===\n[Erro ao processar arquivo: ${error.message}]`;
         }
       }
     }
@@ -96,9 +132,20 @@ serve(async (req) => {
 
     // Add attachment context if available
     if (attachmentContext) {
+      const contextualMessage = attachmentContext + 
+        `\n\n=== INSTRUÇÃO ESPECIAL ===\n` +
+        `Com base nos arquivos anexados acima, você DEVE automaticamente:\n` +
+        `1. Fazer uma análise completa do conteúdo\n` +
+        `2. Extrair personas, requisitos funcionais e não-funcionais\n` +
+        `3. Gerar Business Model Canvas se possível\n` +
+        `4. Criar Product Backlog com User Stories\n` +
+        `5. Elaborar Escopo de Entrega (Memorial Descritivo)\n` +
+        `6. Sugerir próximos passos\n\n` +
+        `PERGUNTA/CONTEXTO DO USUÁRIO: ${message || 'Analise os arquivos anexados e gere os artefatos solicitados.'}`;
+      
       messages.push({
         role: 'user',
-        content: `CONTEXTO DOS ARQUIVOS ANEXADOS:${attachmentContext}\n\nPERGUNTA DO USUÁRIO: ${message}`
+        content: contextualMessage
       });
     } else {
       messages.push({

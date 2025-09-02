@@ -133,6 +133,25 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
     }
   };
 
+  const loadProcessedAttachments = async (chatId: string) => {
+    if (!user) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('smart_hub_uploads')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('session_id', chatId)
+        .eq('processing_status', 'completed');
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error loading processed attachments:', error);
+      return [];
+    }
+  };
+
   const handleSendMessage = async () => {
     if ((!inputMessage.trim() && attachments.length === 0) || isProcessing) return;
 
@@ -146,6 +165,23 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
         if (!chatIdToUse) throw new Error('Failed to create chat');
       }
 
+      // Load processed attachments from database with their content
+      const processedAttachments = await loadProcessedAttachments(chatIdToUse);
+      
+      // Combine local attachments with processed ones
+      const allAttachments = [
+        ...attachments,
+        ...processedAttachments.map(file => ({
+          name: file.file_name,
+          type: file.file_type,
+          size: file.file_size,
+          file_name: file.file_name,
+          transcription: file.transcription,
+          ai_analysis: file.ai_analysis,
+          processing_status: file.processing_status
+        }))
+      ];
+
       // Add user message to UI immediately
       const userMessage: ChatMessage = {
         role: 'user',
@@ -157,12 +193,12 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
       setMessages(prev => [...prev, userMessage]);
       setInputMessage("");
 
-      // Call AI expert
+      // Call AI expert with complete attachment data
       const { data, error } = await supabase.functions.invoke('product-expert-chat', {
         body: {
           chatId: chatIdToUse,
           message: inputMessage,
-          attachments: attachments
+          attachments: allAttachments
         }
       });
 
