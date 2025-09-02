@@ -51,9 +51,38 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
   const [selectedType, setSelectedType] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('date');
 
-  // Memoized filtered and sorted insights with processing
+  // Process insights to work with unified format
+  const processedInsights = useMemo(() => {
+    return insights.map(insight => {
+      // All insights now come from unified_insights table
+      try {
+        const parsedContent = typeof insight.content === 'string' ? JSON.parse(insight.content) : insight.content;
+        return {
+          ...insight,
+          insight_data: parsedContent,
+          executive_summary: insight.metadata?.executive_summary || insight.title,
+          alert_category: insight.metadata?.alert_category || 'GENERAL',
+          generated_at: insight.created_at
+        };
+      } catch (e) {
+        console.error('Error parsing insight content:', e);
+        return {
+          ...insight,
+          insight_data: {},
+          executive_summary: insight.title,
+          alert_category: 'GENERAL',
+          generated_at: insight.created_at
+        };
+      }
+    });
+  }, [insights]);
+
+  // Get filtered insights based on processed insights
   const filteredInsights = useMemo(() => {
-    let filtered = insights.map(insight => processInsightForDisplay(insight, issues));
+    let filtered = processedInsights.map(insight => {
+      // Process each insight with critical alerts
+      return processInsightForDisplay(insight, issues);
+    });
 
     // Filter by search term
     if (searchTerm) {
@@ -97,14 +126,13 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
     });
 
     return filtered;
-  }, [insights, issues, searchTerm, selectedType, sortBy]);
+  }, [processedInsights, issues, searchTerm, selectedType, sortBy]);
 
   // Group insights by type for summary with processing
   const insightsByType = useMemo(() => {
     const groups: Record<string, any[]> = {};
-    const processedInsights = insights.map(insight => processInsightForDisplay(insight, issues));
     
-    processedInsights.forEach((insight) => {
+    filteredInsights.forEach((insight) => {
       const type = insight.insight_type;
       if (!groups[type]) {
         groups[type] = [];
@@ -112,7 +140,7 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
       groups[type].push(insight);
     });
     return groups;
-  }, [insights, issues]);
+  }, [filteredInsights]);
 
   // Critical insights for dashboard
   const criticalInsights = useMemo(() => {

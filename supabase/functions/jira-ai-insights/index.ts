@@ -343,19 +343,27 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
         // Store insight in database
         if (jiraProjectId) {
           await supabaseClient
-            .from('jira_ai_insights')
+            .from('unified_insights')
             .insert({
-              issue_id: issue.id,
               project_id: jiraProjectId,
               insight_type: 'sla_risk',
-              confidence_score: analysis.risk_score,
-              insight_data: {
+              source_type: 'jira',
+              title: 'Análise de Risco SLA',
+              content: JSON.stringify({
                 ...analysis,
                 recommendations: Array.isArray(analysis.recommendations) 
                   ? analysis.recommendations 
                   : [analysis.recommendations || "Revisar prioridade do issue"]
+              }),
+              metadata: {
+                issue_id: issue.id,
+                executive_summary: `⚠️ SLA Risk: Score ${analysis.risk_score}`,
+                alert_category: 'SLA'
               },
-              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+              confidence_score: analysis.risk_score,
+              criticality_score: analysis.risk_score,
+              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              source_origin: 'jira-ai-insights'
             });
         } else {
           console.log('Skipping insight save - no jiraProjectId available');
@@ -371,19 +379,27 @@ async function generateSLARiskInsights(supabaseClient: any, openAIApiKey: string
         // Create a fallback insight
         if (jiraProjectId) {
           await supabaseClient
-            .from('jira_ai_insights')
+            .from('unified_insights')
             .insert({
-              issue_id: issue.id,
               project_id: jiraProjectId,
               insight_type: 'sla_risk',
-              confidence_score: 0.5,
-              insight_data: {
+              source_type: 'jira',
+              title: 'Análise de Risco SLA (Fallback)',
+              content: JSON.stringify({
                 risk_score: 0.5,
                 risk_factors: ['Análise automática indisponível'],
                 recommendations: ['Revisar manualmente este issue'],
                 estimated_completion_days: 3
+              }),
+              metadata: {
+                issue_id: issue.id,
+                executive_summary: '⚠️ SLA Risk: Análise indisponível',
+                alert_category: 'SLA'
               },
-              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+              confidence_score: 0.5,
+              criticality_score: 0.5,
+              expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+              source_origin: 'jira-ai-insights'
             });
         }
         
@@ -489,19 +505,28 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
       // Store insight in database
       if (jiraProjectId) {
         await supabaseClient
-          .from('jira_ai_insights')
+          .from('unified_insights')
           .insert({
             project_id: jiraProjectId,
-            insight_type: 'sprint_prediction',
-            confidence_score: analysis.completion_probability,
-            insight_data: { 
+            insight_type: 'sprint_completion',
+            source_type: 'jira',
+            title: 'Previsão de Conclusão Sprint',
+            content: JSON.stringify({ 
               ...analysis, 
               sprint_name: sprint.name,
               recommendations: Array.isArray(analysis.recommendations) 
                 ? analysis.recommendations 
                 : [analysis.recommendations || "Previsão de sprint calculada"]
+            }),
+            metadata: {
+              sprint_id: sprint.id,
+              executive_summary: `📊 Sprint ${sprint.name}: ${Math.round(analysis.completion_probability * 100)}% chance de conclusão`,
+              alert_category: 'SPRINT'
             },
-            expires_at: sprint.end_date
+            confidence_score: analysis.completion_probability,
+            criticality_score: 1 - analysis.completion_probability, // Higher criticality for lower completion probability
+            expires_at: sprint.end_date,
+            source_origin: 'jira-ai-insights'
           });
       }
 
@@ -517,18 +542,27 @@ async function predictSprintCompletion(supabaseClient: any, openAIApiKey: string
       // Create fallback prediction
       if (jiraProjectId) {
         await supabaseClient
-          .from('jira_ai_insights')
+          .from('unified_insights')
           .insert({
             project_id: jiraProjectId,
-            insight_type: 'sprint_prediction',
-            confidence_score: 0.5,
-            insight_data: {
+            insight_type: 'sprint_completion',
+            source_type: 'jira',
+            title: 'Previsão de Sprint (Fallback)',
+            content: JSON.stringify({
               completion_probability: 0.5,
               risk_factors: ['Análise automática indisponível'],
               recommendations: ['Revisar progresso do sprint manualmente'],
               velocity_insights: 'Dados insuficientes para análise'
+            }),
+            metadata: {
+              sprint_id: sprint.id,
+              executive_summary: '📊 Sprint: Análise indisponível',
+              alert_category: 'SPRINT'
             },
-            expires_at: sprint.end_date
+            confidence_score: 0.5,
+            criticality_score: 0.5,
+            expires_at: sprint.end_date,
+            source_origin: 'jira-ai-insights'
           });
       }
     }
@@ -626,19 +660,28 @@ async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string,
     // Store insight in database
     if (jiraProjectId) {
       await supabaseClient
-        .from('jira_ai_insights')
+        .from('unified_insights')
         .insert({
           project_id: jiraProjectId,
           insight_type: 'team_performance',
-          confidence_score: analysis.team_health_score || 0.8,
-          insight_data: { 
+          source_type: 'jira',
+          title: 'Análise de Performance da Equipe',
+          content: JSON.stringify({ 
             ...analysis, 
             team_stats: teamStats,
             recommendations: Array.isArray(analysis.workload_recommendations) 
               ? analysis.workload_recommendations 
               : [analysis.workload_recommendations || "Análise de performance da equipe concluída"]
+          }),
+          metadata: {
+            executive_summary: `👥 Team Performance: Score ${Math.round((analysis.team_health_score || 0.8) * 100)}/100`,
+            alert_category: 'TEAM',
+            team_members_count: teamStats.length
           },
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+          confidence_score: analysis.team_health_score || 0.8,
+          criticality_score: analysis.performance_issues?.length > 0 ? 0.7 : 0.3,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
+          source_origin: 'jira-ai-insights'
         });
     }
 
