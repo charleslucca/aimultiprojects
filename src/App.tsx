@@ -13,13 +13,14 @@ import Projects from "./pages/Projects";
 import Dashboard from "./pages/Dashboard";
 import Team from "./pages/Team";
 import Academy from "./pages/Academy";
-import JiraCockpit from "./pages/JiraCockpit";
-import JiraCockpitProject from "./pages/JiraCockpitProject";
-import AzureCockpitProject from "./pages/AzureCockpitProject";
+import Settings from "./pages/Settings";
 import SmartHub from "./pages/SmartHub";
 import SmartDiscovery from "./pages/SmartDiscovery";
 import SmartDelivery from "./pages/SmartDelivery";
-import Settings from "./pages/Settings";
+import JiraCockpitProject from "./pages/JiraCockpitProject";
+import AzureCockpitProject from "./pages/AzureCockpitProject";
+import GitHubCockpitProject from "./pages/GitHubCockpitProject";
+import JiraCockpit from "./pages/JiraCockpit";
 import NotFound from "./pages/NotFound";
 
 // Create QueryClient instance with proper configuration
@@ -68,6 +69,7 @@ const App: React.FC = () => {
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/projects/:projectId/jira" element={<JiraCockpitProject />} />
                   <Route path="/projects/:projectId/azure" element={<AzureCockpitProject />} />
+                  <Route path="/projects/:projectId/github" element={<GitHubCockpitProject />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/team" element={<Team />} />
                   <Route path="/academy" element={<Academy />} />

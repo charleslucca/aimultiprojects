@@ -141,6 +141,26 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       }
     }
 
+    if (selectedType === 'github') {
+      if (!config.owner || !config.repo || !config.token) {
+        toast({
+          title: 'Campos obrigatórios',
+          description: 'Preencha owner, repositório e token para integração GitHub',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (!testResult.success) {
+        toast({
+          title: 'Teste de conexão obrigatório',
+          description: 'Execute o teste de conexão com sucesso antes de salvar',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     try {
 
       const { error } = await supabase
@@ -223,6 +243,53 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
         });
       } else {
         throw new Error(data?.message || 'Falha na conexão com Jira');
+      }
+    } catch (error: any) {
+      setTestResult({ success: false, message: error.message });
+      toast({
+        title: 'Erro na conexão',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const testGitHubConnection = async () => {
+    if (!config.owner || !config.repo || !config.token) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha owner, repositório e token antes de testar',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsTestingConnection(true);
+    setTestResult({});
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('github-connection-test', {
+        body: { 
+          token: config.token,
+          owner: config.owner,
+          repo: config.repo
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Erro ao testar conexão: ${error.message}`);
+      }
+      
+      if (data?.success) {
+        setTestResult({ success: true, message: `Conexão OK! Usuário: ${data.connection?.user?.login}` });
+        toast({
+          title: 'Conexão bem-sucedida',
+          description: 'Conexão com GitHub estabelecida com sucesso',
+        });
+      } else {
+        throw new Error(data?.error || 'Falha na conexão com GitHub');
       }
     } catch (error: any) {
       setTestResult({ success: false, message: error.message });
@@ -695,23 +762,128 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       case 'github':
         return (
           <>
-            <div>
-              <Label htmlFor="github-repo">Repositório *</Label>
-              <Input
-                id="github-repo"
-                value={config.repository || ''}
-                onChange={(e) => setConfig({ ...config, repository: e.target.value })}
-                placeholder="usuario/repositorio"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="github-owner">Owner/Organization *</Label>
+                <Input
+                  id="github-owner"
+                  value={config.owner || ''}
+                  onChange={(e) => {
+                    setConfig({ ...config, owner: e.target.value });
+                    setTestResult({});
+                  }}
+                  placeholder="nome-da-organizacao"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Nome do usuário ou organização no GitHub
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="github-repo">Repositório *</Label>
+                <Input
+                  id="github-repo"
+                  value={config.repo || ''}
+                  onChange={(e) => {
+                    setConfig({ ...config, repo: e.target.value });
+                    setTestResult({});
+                  }}
+                  placeholder="nome-do-repositorio"
+                />
+              </div>
             </div>
+
             <div>
-              <Label htmlFor="github-token">GitHub Token</Label>
+              <Label htmlFor="github-token">Personal Access Token *</Label>
               <Input
                 id="github-token"
                 type="password"
                 value={config.token || ''}
-                onChange={(e) => setConfig({ ...config, token: e.target.value })}
-                placeholder="Seu GitHub Personal Access Token"
+                onChange={(e) => {
+                  setConfig({ ...config, token: e.target.value });
+                  setTestResult({});
+                }}
+                placeholder="ghp_xxxxxxxxxxxx"
+              />
+              
+              <Collapsible open={showPATInstructions} onOpenChange={setShowPATInstructions}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="mt-2 p-0 h-auto text-xs text-muted-foreground hover:text-foreground">
+                    {showPATInstructions ? <ChevronDown className="h-3 w-3 mr-1" /> : <ChevronRight className="h-3 w-3 mr-1" />}
+                    Como criar um Personal Access Token?
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2 space-y-2">
+                  <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg space-y-2">
+                    <p className="font-medium">Passos para criar um PAT no GitHub:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Acesse <strong>Settings</strong> → <strong>Developer settings</strong></li>
+                      <li>Clique em <strong>Personal access tokens</strong> → <strong>Tokens (classic)</strong></li>
+                      <li>Clique em <strong>Generate new token</strong></li>
+                      <li>Configure as permissões necessárias:</li>
+                      <ul className="list-disc list-inside ml-4 space-y-1">
+                        <li><strong>repo:</strong> Full control of private repositories</li>
+                        <li><strong>read:user:</strong> Read access to user profile</li>
+                        <li><strong>read:org:</strong> Read access to organization (se aplicável)</li>
+                      </ul>
+                    </ol>
+                    <div className="flex items-center gap-2 pt-2 border-t border-border">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => window.open('https://github.com/settings/tokens', '_blank')}
+                        className="text-xs"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Criar PAT no GitHub
+                      </Button>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  onClick={testGitHubConnection}
+                  disabled={isTestingConnection || !config.owner || !config.repo || !config.token}
+                  className="flex items-center gap-2"
+                >
+                  {isTestingConnection ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  {isTestingConnection ? 'Testando...' : 'Testar Conexão'}
+                </Button>
+                
+                {testResult.success !== undefined && (
+                  <Badge variant={testResult.success ? 'default' : 'destructive'}>
+                    {testResult.success ? 'Conexão OK' : 'Falhou'}
+                  </Badge>
+                )}
+              </div>
+              
+              {testResult.message && (
+                <p className={`text-xs whitespace-pre-line ${testResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {testResult.message}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <Label htmlFor="auto-sync-github" className="font-medium">Sincronização Automática</Label>
+                <p className="text-xs text-muted-foreground">
+                  Sincronizar dados automaticamente a cada hora
+                </p>
+              </div>
+              <Switch
+                id="auto-sync-github"
+                checked={config.autoSync !== false}
+                onCheckedChange={(checked) => setConfig({ ...config, autoSync: checked })}
               />
             </div>
           </>
@@ -837,9 +1009,12 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
                       <span className="text-2xl">{typeInfo.icon}</span>
                       <div>
                         <CardTitle className="text-base">{typeInfo.label}</CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          {integration.configuration?.url || integration.configuration?.repository || 'Configurado'}
-                        </p>
+                         <p className="text-sm text-muted-foreground">
+                           {integration.configuration?.url || 
+                            integration.configuration?.organization ||
+                            `${integration.configuration?.owner}/${integration.configuration?.repo}` || 
+                            'Configurado'}
+                         </p>
                       </div>
                     </div>
                     <Badge variant={integration.is_active ? "default" : "secondary"}>

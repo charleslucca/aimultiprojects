@@ -33,6 +33,12 @@ verify_jwt = false
 [functions.generate-insights]
 verify_jwt = false
 
+[functions.github-connection-test]
+verify_jwt = false
+
+[functions.github-sync]
+verify_jwt = false
+
 [functions.jira-sync]
 verify_jwt = false
 

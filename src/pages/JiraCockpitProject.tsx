@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Settings, RefreshCw, BarChart3, AlertTriangle, User, ArrowLeft, Brain, TrendingUp, Kanban } from 'lucide-react';
+import { Settings, RefreshCw, BarChart3, AlertTriangle, User, ArrowLeft, Brain, TrendingUp, Kanban, Code } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import JiraConfigModal from '@/components/jira/JiraConfigModal';
@@ -13,6 +13,7 @@ import PredictiveCharts from '@/components/jira/PredictiveCharts';
 import UserProjectParticipationModal from '@/components/jira/UserProjectParticipationModal';
 import EconomicDashboard from '@/components/jira/EconomicDashboard';
 import AIInsightsPanel from '@/components/jira/AIInsightsPanel';
+import { GitHubBoard } from '@/components/github/GitHubBoard';
 import { useNavigate } from 'react-router-dom';
 
 const JiraCockpitProject: React.FC = () => {
@@ -386,7 +387,7 @@ const JiraCockpitProject: React.FC = () => {
 
       {/* Modern Tabbed Dashboard */}
       <Tabs defaultValue="insights" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3 lg:w-fit">
+        <TabsList className="grid w-full grid-cols-4 lg:w-fit">
           <TabsTrigger value="insights" className="flex items-center gap-2">
             <Brain className="h-4 w-4" />
             <span className="hidden sm:inline">Insights IA</span>
@@ -398,6 +399,10 @@ const JiraCockpitProject: React.FC = () => {
           <TabsTrigger value="kanban" className="flex items-center gap-2">
             <Kanban className="h-4 w-4" />
             <span className="hidden sm:inline">Board</span>
+          </TabsTrigger>
+          <TabsTrigger value="code" className="flex items-center gap-2">
+            <Code className="h-4 w-4" />
+            <span className="hidden sm:inline">Code</span>
           </TabsTrigger>
         </TabsList>
 
@@ -434,6 +439,10 @@ const JiraCockpitProject: React.FC = () => {
             insights={insights}
             onIssueUpdate={loadProjectData}
           />
+        </TabsContent>
+
+        <TabsContent value="code">
+          <GitHubBoard projectId={projectId} />
         </TabsContent>
       </Tabs>
 
