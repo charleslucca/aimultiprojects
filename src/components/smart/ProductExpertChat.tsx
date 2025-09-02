@@ -225,9 +225,41 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
 
     } catch (error: any) {
       console.error('Error sending message:', error);
+      
+      // Determine user-friendly error message based on error type
+      let errorMessage = 'Ocorreu um erro inesperado. Tente novamente.';
+      
+      if (error.message?.includes('timeout') || error.message?.includes('408')) {
+        errorMessage = 'O processamento está demorando mais que o esperado. Tente com arquivos menores ou aguarde alguns minutos.';
+      } else if (error.message?.includes('503') || error.message?.includes('Service')) {
+        errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.';
+      } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
+        errorMessage = 'Problema de conexão. Verifique sua internet e tente novamente.';
+      } else if (error.message?.includes('500')) {
+        errorMessage = 'Erro interno do servidor. Os desenvolvedores foram notificados.';
+      } else if (error.message?.includes('temporary_overload')) {
+        errorMessage = 'Serviço temporariamente sobrecarregado. Aguarde alguns instantes.';
+      }
+
+      // Add error message to chat
+      const errorAiMessage: ChatMessage = {
+        role: 'assistant',
+        content: `❌ **Erro**: ${errorMessage}
+
+💡 **Sugestões:**
+- Tente novamente em alguns instantes
+- Se o problema persistir, recarregue a página
+- Verifique se os arquivos não são muito grandes (máx. 10MB)
+
+Seus arquivos foram salvos automaticamente.`,
+        timestamp: new Date().toISOString()
+      };
+
+      setMessages(prev => [...prev, errorAiMessage]);
+
       toast({
-        title: "Erro ao enviar mensagem",
-        description: error.message || "Tente novamente.",
+        title: "Erro ao processar mensagem",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {

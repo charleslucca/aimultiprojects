@@ -53,39 +53,73 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Global timeout for the entire edge function (25 seconds)
+  const globalController = new AbortController();
+  const globalTimeout = setTimeout(() => {
+    console.log('Global timeout reached (25s), aborting entire function');
+    globalController.abort();
+  }, 25000);
+
   try {
+    // Validate environment variables first
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    if (!openaiKey) {
+      throw new Error('OPENAI_API_KEY não configurada. Configure no Supabase Secrets.');
+    }
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Configuração do Supabase incompleta.');
+    }
+
     const { chatId, message, attachments = [] } = await req.json();
 
     if (!message && attachments.length === 0) {
       throw new Error('Mensagem ou anexos são obrigatórios');
     }
 
-    // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    console.log(`Starting request processing - chatId: ${chatId}, attachments: ${attachments.length}`);
 
-    // Process attachments with their processed content
+    // Initialize Supabase client
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Process attachments with their processed content (with timeout protection)
     let attachmentContext = '';
     if (attachments && attachments.length > 0) {
-      console.log('Processing', attachments.length, 'attachments');
+      console.log(`Processing ${attachments.length} attachments`);
       
+      const attachmentStartTime = Date.now();
       for (const attachment of attachments) {
+        // Skip if taking too long (max 8 seconds for all attachments)
+        if (Date.now() - attachmentStartTime > 8000) {
+          console.log('Attachment processing timeout - skipping remaining files');
+          break;
+        }
+
         try {
           let fileContent = '';
           
           // Use processed content if available (transcription from database)
           if (attachment.transcription) {
             fileContent = attachment.transcription;
+            console.log(`Using transcription for ${attachment.name || attachment.file_name}`);
           } else if (attachment.path || attachment.file_path) {
-            // Fallback to download if no processed content
+            // Fallback to download if no processed content (with 3s timeout)
+            console.log(`Downloading file: ${attachment.path || attachment.file_path}`);
+            const downloadController = new AbortController();
+            setTimeout(() => downloadController.abort(), 3000);
+            
             const { data: fileData } = await supabase.storage
               .from('smart-hub-files')
               .download(attachment.path || attachment.file_path);
             
             if (fileData) {
               fileContent = await fileData.text();
+              // Limit content size to prevent huge payloads
+              if (fileContent.length > 10000) {
+                fileContent = fileContent.substring(0, 10000) + '\n\n[CONTEÚDO TRUNCADO - ARQUIVO MUITO GRANDE]';
+              }
             }
           }
           
@@ -101,10 +135,11 @@ serve(async (req) => {
             }
           }
         } catch (error) {
-          console.error('Error processing attachment:', error);
+          console.error(`Error processing attachment ${attachment.name}:`, error.message);
           attachmentContext += `\n\n=== ${attachment.name || attachment.file_name} ===\n[Erro ao processar arquivo: ${error.message}]`;
         }
       }
+      console.log(`Attachment processing completed in ${Date.now() - attachmentStartTime}ms`);
     }
 
     // Get chat history if chatId provided
@@ -154,10 +189,11 @@ serve(async (req) => {
       });
     }
 
-    console.log('Sending request to OpenAI with', messages.length, 'messages');
+    console.log(`Sending request to OpenAI with ${messages.length} messages`);
+    const requestStartTime = Date.now();
 
-    // Call OpenAI API with improved timeout and retry logic
-    const makeOpenAICall = async (model: string, timeoutMs: number = 12000) => {
+    // Optimized OpenAI API call with shorter timeouts
+    const makeOpenAICall = async (model: string, timeoutMs: number = 5000) => {
       console.log(`Trying ${model} with ${timeoutMs}ms timeout...`);
       
       const controller = new AbortController();
@@ -177,18 +213,18 @@ serve(async (req) => {
         // Handle different model parameter requirements
         if (model.includes('gpt-4o')) {
           // Legacy models use max_tokens and support temperature
-          requestBody.max_tokens = 1500;
+          requestBody.max_tokens = 800; // Reduced for faster response
           requestBody.temperature = 0.7;
         } else {
           // Newer models (GPT-5, GPT-4.1) use max_completion_tokens, no temperature
-          requestBody.max_completion_tokens = 1500;
+          requestBody.max_completion_tokens = 800; // Reduced for faster response
         }
 
         console.log(`Making request to ${model}...`);
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+            'Authorization': `Bearer ${openaiKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(requestBody),
@@ -196,46 +232,64 @@ serve(async (req) => {
         });
 
         clearTimeout(timeoutId);
-        console.log(`Response received from ${model}, status:`, response.status);
+        console.log(`Response received from ${model}, status: ${response.status} (took ${Date.now() - requestStartTime}ms)`);
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+          console.error(`OpenAI API error details:`, errorText);
+          throw new Error(`OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`);
         }
 
         const result = await response.json();
-        console.log(`Successfully got response from ${model}`);
+        console.log(`Successfully got response from ${model} (${result.choices[0].message.content.length} chars)`);
         return result;
         
       } catch (error) {
         clearTimeout(timeoutId);
-        console.log(`Error with ${model}:`, error.message);
+        console.error(`Error with ${model}:`, error.message);
         throw error;
       }
     };
 
-    // Try models with improved fallback strategy - start with most reliable
+    // Fast fallback strategy with shorter timeouts
     let data;
     let modelUsed = 'gpt-4o-mini';
     
     try {
-      // Start with most reliable and fastest model
-      console.log('Starting with GPT-4o-mini (most reliable)...');
-      data = await makeOpenAICall('gpt-4o-mini', 8000);
+      // Start with fastest and most reliable model - short timeout
+      console.log('Starting with GPT-4o-mini (fastest)...');
+      data = await makeOpenAICall('gpt-4o-mini', 5000); // 5 seconds only
       modelUsed = 'gpt-4o-mini';
     } catch (error) {
-      console.log('GPT-4o-mini failed, trying GPT-4.1:', error.message);
+      console.log(`GPT-4o-mini failed: ${error.message}`);
       try {
-        data = await makeOpenAICall('gpt-4.1-2025-04-14', 10000);
+        // Try GPT-4.1 with slightly longer timeout
+        console.log('Trying GPT-4.1...');
+        data = await makeOpenAICall('gpt-4.1-2025-04-14', 7000); // 7 seconds
         modelUsed = 'gpt-4.1-2025-04-14';
       } catch (error2) {
-        console.log('GPT-4.1 failed, trying GPT-5:', error2.message);
+        console.log(`GPT-4.1 failed: ${error2.message}`);
         try {
-          data = await makeOpenAICall('gpt-5-2025-08-07', 12000);
+          // Last resort: GPT-5 with maximum timeout allowed
+          console.log('Last attempt with GPT-5...');
+          data = await makeOpenAICall('gpt-5-2025-08-07', 8000); // 8 seconds max
           modelUsed = 'gpt-5-2025-08-07';
         } catch (error3) {
-          console.error('All models failed:', error3.message);
-          throw new Error('Todos os modelos de IA estão temporariamente indisponíveis. Tente novamente em alguns instantes.');
+          console.error(`All models failed - GPT-4o: ${error.message}, GPT-4.1: ${error2.message}, GPT-5: ${error3.message}`);
+          
+          // Fallback response instead of complete failure
+          clearTimeout(globalTimeout);
+          return new Response(
+            JSON.stringify({
+              response: "Desculpe, o serviço de IA está temporariamente sobrecarregado. Por favor, tente novamente em alguns instantes. Se o problema persistir, os arquivos foram salvos e você pode tentar novamente mais tarde.",
+              artifacts: null,
+              model_used: 'fallback',
+              error: 'temporary_overload'
+            }),
+            {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            }
+          );
         }
       }
     }
@@ -302,17 +356,40 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in product-expert-chat:', error);
+    clearTimeout(globalTimeout);
+    console.error('Critical error in product-expert-chat:', {
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+    
+    // More specific error messages
+    let userMessage = 'Erro interno do servidor. Tente novamente.';
+    let statusCode = 500;
+    
+    if (error.message.includes('OPENAI_API_KEY')) {
+      userMessage = 'Configuração da API OpenAI não encontrada. Entre em contato com o suporte.';
+      statusCode = 503;
+    } else if (error.message.includes('timeout') || error.message.includes('aborted')) {
+      userMessage = 'O processamento está demorando mais que o esperado. Tente com arquivos menores ou aguarde alguns minutos.';
+      statusCode = 408;
+    } else if (error.message.includes('Supabase')) {
+      userMessage = 'Problema de conectividade com o banco de dados. Tente novamente em instantes.';
+      statusCode = 503;
+    }
     
     return new Response(
       JSON.stringify({
         error: error.message,
-        details: 'Erro interno do servidor. Tente novamente.'
+        user_message: userMessage,
+        timestamp: new Date().toISOString()
       }),
       {
-        status: 500,
+        status: statusCode,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
+  } finally {
+    clearTimeout(globalTimeout);
   }
 });
