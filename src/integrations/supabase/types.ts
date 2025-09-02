@@ -842,6 +842,54 @@ export type Database = {
         }
         Relationships: []
       }
+      github_releases: {
+        Row: {
+          body: string | null
+          created_at: string
+          draft: boolean | null
+          github_id: number
+          id: string
+          integration_id: string
+          name: string | null
+          prerelease: boolean | null
+          published_at: string | null
+          raw_data: Json | null
+          repository_id: string
+          synced_at: string | null
+          tag_name: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          draft?: boolean | null
+          github_id: number
+          id?: string
+          integration_id: string
+          name?: string | null
+          prerelease?: boolean | null
+          published_at?: string | null
+          raw_data?: Json | null
+          repository_id: string
+          synced_at?: string | null
+          tag_name: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          draft?: boolean | null
+          github_id?: number
+          id?: string
+          integration_id?: string
+          name?: string | null
+          prerelease?: boolean | null
+          published_at?: string | null
+          raw_data?: Json | null
+          repository_id?: string
+          synced_at?: string | null
+          tag_name?: string
+        }
+        Relationships: []
+      }
       github_repositories: {
         Row: {
           created_at: string
@@ -908,6 +956,111 @@ export type Database = {
           synced_at?: string | null
           updated_at?: string | null
           watchers_count?: number | null
+        }
+        Relationships: []
+      }
+      github_workflow_runs: {
+        Row: {
+          conclusion: string | null
+          created_at: string
+          duration_seconds: number | null
+          github_id: number
+          head_branch: string | null
+          head_sha: string | null
+          id: string
+          integration_id: string
+          raw_data: Json | null
+          repository_id: string
+          run_number: number | null
+          run_started_at: string | null
+          run_updated_at: string | null
+          status: string | null
+          synced_at: string | null
+          workflow_id: string
+          workflow_name: string | null
+        }
+        Insert: {
+          conclusion?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          github_id: number
+          head_branch?: string | null
+          head_sha?: string | null
+          id?: string
+          integration_id: string
+          raw_data?: Json | null
+          repository_id: string
+          run_number?: number | null
+          run_started_at?: string | null
+          run_updated_at?: string | null
+          status?: string | null
+          synced_at?: string | null
+          workflow_id: string
+          workflow_name?: string | null
+        }
+        Update: {
+          conclusion?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          github_id?: number
+          head_branch?: string | null
+          head_sha?: string | null
+          id?: string
+          integration_id?: string
+          raw_data?: Json | null
+          repository_id?: string
+          run_number?: number | null
+          run_started_at?: string | null
+          run_updated_at?: string | null
+          status?: string | null
+          synced_at?: string | null
+          workflow_id?: string
+          workflow_name?: string | null
+        }
+        Relationships: []
+      }
+      github_workflows: {
+        Row: {
+          badge_url: string | null
+          created_at: string
+          github_id: number
+          html_url: string | null
+          id: string
+          integration_id: string
+          name: string
+          raw_data: Json | null
+          repository_id: string
+          state: string | null
+          synced_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          badge_url?: string | null
+          created_at?: string
+          github_id: number
+          html_url?: string | null
+          id?: string
+          integration_id: string
+          name: string
+          raw_data?: Json | null
+          repository_id: string
+          state?: string | null
+          synced_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          badge_url?: string | null
+          created_at?: string
+          github_id?: number
+          html_url?: string | null
+          id?: string
+          integration_id?: string
+          name?: string
+          raw_data?: Json | null
+          repository_id?: string
+          state?: string | null
+          synced_at?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }

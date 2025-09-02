@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GitBranch, GitCommit, GitPullRequest, Users, Code, Activity, Star, GitFork } from 'lucide-react';
+import { GitBranch, GitCommit, GitPullRequest, Users, Code, Activity, Star, GitFork, Brain, Shield, Target, TrendingUp, Clock, Calendar, CheckCircle } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { CommitAnalytics } from './CommitAnalytics';
@@ -165,6 +165,41 @@ export const GitHubBoard: React.FC<GitHubBoardProps> = ({ projectId }) => {
     } catch (error) {
       console.error('Sync error:', error);
       toast.error('Erro na sincronização do GitHub');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const generateGitHubInsight = async (action: string, buttonText: string) => {
+    if (!integrationId || !projectId) {
+      toast.error('Configuração GitHub incompleta');
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      toast.info(`Gerando ${buttonText}...`);
+
+      const { data, error } = await supabase.functions.invoke('github-ai-insights', {
+        body: { 
+          action,
+          integration_id: integrationId,
+          project_id: projectId
+        }
+      });
+
+      if (error) throw error;
+
+      toast.success(`${buttonText} gerado com sucesso!`);
+      
+      // Redirect to insights page after a short delay
+      setTimeout(() => {
+        window.location.href = `/projects/${projectId}/jira`;
+      }, 1500);
+
+    } catch (error: any) {
+      console.error('GitHub insight generation error:', error);
+      toast.error(`Erro ao gerar ${buttonText}: ${error.message}`);
     } finally {
       setSyncing(false);
     }
@@ -339,6 +374,108 @@ export const GitHubBoard: React.FC<GitHubBoardProps> = ({ projectId }) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* GitHub AI Insights Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Brain className="h-5 w-5 text-primary" />
+            Insights de IA para Código
+          </CardTitle>
+          <CardDescription>
+            Análises automatizadas de segurança, qualidade, performance e mais
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('security_analysis', 'Análise de Segurança')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <Shield className="h-4 w-4" />
+              <span className="text-xs">Segurança</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('code_quality_assessment', 'Qualidade do Código')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <CheckCircle className="h-4 w-4" />
+              <span className="text-xs">Qualidade</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('test_coverage_analysis', 'Cobertura de Testes')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <Target className="h-4 w-4" />
+              <span className="text-xs">Testes</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('performance_insights', 'Performance')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <TrendingUp className="h-4 w-4" />
+              <span className="text-xs">Performance</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('pipeline_health', 'Pipeline CI/CD')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <Clock className="h-4 w-4" />
+              <span className="text-xs">Pipeline</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('dev_performance', 'Performance da Equipe')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <Users className="h-4 w-4" />
+              <span className="text-xs">Equipe</span>
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateGitHubInsight('release_prediction', 'Previsão de Release')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <Calendar className="h-4 w-4" />
+              <span className="text-xs">Release</span>
+            </Button>
+            
+            <Button
+              onClick={() => generateGitHubInsight('generate_github_insights', 'Todos os Insights')}
+              disabled={!integrationId}
+              className="flex flex-col items-center gap-2 h-auto p-4"
+            >
+              <Brain className="h-4 w-4" />
+              <span className="text-xs">Gerar Todos</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Detailed Insights */}
       <Tabs defaultValue="commits" className="space-y-4">

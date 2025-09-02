@@ -216,6 +216,131 @@ serve(async (req) => {
       console.error('Failed to fetch contributors:', contributorsResponse.statusText)
     }
 
+    // Sync workflows for pipeline analysis
+    let workflowsData = []
+    const workflowsResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/workflows`,
+      { headers }
+    )
+
+    if (workflowsResponse.ok) {
+      const workflowsResult = await workflowsResponse.json()
+      workflowsData = workflowsResult.workflows || []
+      
+      for (const workflow of workflowsData) {
+        try {
+          await supabase
+            .from('github_workflows')
+            .upsert({
+              integration_id: integrationId,
+              repository_id: repository.id,
+              github_id: workflow.id,
+              name: workflow.name,
+              state: workflow.state,
+              badge_url: workflow.badge_url,
+              html_url: workflow.html_url,
+              created_at: workflow.created_at,
+              updated_at: workflow.updated_at,
+              raw_data: workflow,
+              synced_at: new Date().toISOString()
+            }, {
+              onConflict: 'github_id,repository_id'
+            })
+            
+          // Sync recent workflow runs for this workflow
+          const runsResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflow.id}/runs?per_page=20`,
+            { headers }
+          )
+          
+          if (runsResponse.ok) {
+            const runsResult = await runsResponse.json()
+            const runs = runsResult.workflow_runs || []
+            
+            for (const run of runs) {
+              try {
+                // Calculate duration if both timestamps exist
+                let durationSeconds = null
+                if (run.run_started_at && run.updated_at) {
+                  const startTime = new Date(run.run_started_at).getTime()
+                  const endTime = new Date(run.updated_at).getTime()
+                  durationSeconds = Math.round((endTime - startTime) / 1000)
+                }
+                
+                await supabase
+                  .from('github_workflow_runs')
+                  .upsert({
+                    integration_id: integrationId,
+                    repository_id: repository.id,
+                    workflow_id: workflow.id,
+                    github_id: run.id,
+                    run_number: run.run_number,
+                    status: run.status,
+                    conclusion: run.conclusion,
+                    workflow_name: run.name,
+                    head_branch: run.head_branch,
+                    head_sha: run.head_sha,
+                    run_started_at: run.run_started_at,
+                    run_updated_at: run.updated_at,
+                    duration_seconds: durationSeconds,
+                    raw_data: run,
+                    synced_at: new Date().toISOString()
+                  }, {
+                    onConflict: 'github_id,repository_id'
+                  })
+              } catch (error) {
+                console.error('Error syncing workflow run:', run.id, error)
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing workflow:', workflow.name, error)
+        }
+      }
+      console.log(`Synced ${workflowsData.length} workflows`)
+    } else {
+      console.error('Failed to fetch workflows:', workflowsResponse.statusText)
+    }
+
+    // Sync releases for release prediction
+    let releasesData = []
+    const releasesResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/releases?per_page=20`,
+      { headers }
+    )
+
+    if (releasesResponse.ok) {
+      releasesData = await releasesResponse.json()
+      
+      for (const release of releasesData) {
+        try {
+          await supabase
+            .from('github_releases')
+            .upsert({
+              integration_id: integrationId,
+              repository_id: repository.id,
+              github_id: release.id,
+              tag_name: release.tag_name,
+              name: release.name,
+              body: release.body,
+              draft: release.draft,
+              prerelease: release.prerelease,
+              published_at: release.published_at,
+              created_at: release.created_at,
+              raw_data: release,
+              synced_at: new Date().toISOString()
+            }, {
+              onConflict: 'github_id,repository_id'
+            })
+        } catch (error) {
+          console.error('Error syncing release:', release.tag_name, error)
+        }
+      }
+      console.log(`Synced ${releasesData.length} releases`)
+    } else {
+      console.error('Failed to fetch releases:', releasesResponse.statusText)
+    }
+
     // Update integration last sync time
     await supabase
       .from('project_integrations')
@@ -235,7 +360,9 @@ serve(async (req) => {
           repository: 1,
           commits: commitsData?.length || 0,
           pullRequests: prsData?.length || 0,
-          contributors: contributorsData?.length || 0
+          contributors: contributorsData?.length || 0,
+          workflows: workflowsData?.length || 0,
+          releases: releasesData?.length || 0
         }
       }),
       { 

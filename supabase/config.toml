@@ -39,6 +39,9 @@ verify_jwt = false
 [functions.github-sync]
 verify_jwt = false
 
+[functions.github-ai-insights]
+verify_jwt = false
+
 [functions.jira-sync]
 verify_jwt = false
 
