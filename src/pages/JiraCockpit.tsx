@@ -81,11 +81,12 @@ const JiraCockpit: React.FC = () => {
       if (issuesError) throw issuesError;
       setIssues(issuesData || []);
 
-      // Load AI insights
+      // Load AI insights from unified_insights for Jira
       const { data: insightsData, error: insightsError } = await supabase
-        .from('jira_ai_insights')
+        .from('unified_insights')
         .select('*')
-        .order('generated_at', { ascending: false })
+        .eq('source_type', 'jira')
+        .order('created_at', { ascending: false })
         .limit(50);
 
       if (insightsError) throw insightsError;

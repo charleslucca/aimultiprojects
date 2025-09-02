@@ -820,17 +820,24 @@ async function performSentimentAnalysis(supabaseClient: any, openAIApiKey: strin
       
       const analysis = JSON.parse(content);
 
-      // Store insight in database
+      // Store insight in unified_insights
       if (jiraProjectId) {
         await supabaseClient
-          .from('jira_ai_insights')
+          .from('unified_insights')
           .insert({
-            issue_id: issue.id,
-            project_id: jiraProjectId,
             insight_type: 'sentiment',
+            source_type: 'jira',
+            title: `Análise de Sentimento - ${issue.jira_key}`,
+            content: JSON.stringify(analysis),
+            metadata: {
+              issue_id: issue.id,
+              jira_key: issue.jira_key,
+              sentiment_score: analysis.sentiment_score
+            },
             confidence_score: Math.abs(analysis.sentiment_score),
-            insight_data: analysis,
-            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+            project_id: jiraProjectId,
+            expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            source_origin: 'jira-ai-insights'
           });
       }
 
@@ -960,19 +967,31 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
     
     const analysis = JSON.parse(content);
 
-    // Store insight in database
+    // Store insight in unified_insights
     if (jiraProjectId) {
       await supabaseClient
-        .from('jira_ai_insights')
+        .from('unified_insights')
         .insert({
-          project_id: jiraProjectId,
           insight_type: 'cost_analysis',
-          confidence_score: analysis.cost_efficiency_score || 0.8,
-          insight_data: {
+          source_type: 'jira',
+          title: 'Análise de Custos',
+          content: JSON.stringify({
             ...analysis,
             total_cost: totalProjectCost,
             completed_cost: completedIssueCost,
-            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0,
+            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0
+          }),
+          metadata: {
+            total_cost: totalProjectCost,
+            completed_cost: completedIssueCost,
+            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0
+          },
+          confidence_score: analysis.cost_efficiency_score || 0.8,
+          project_id: jiraProjectId,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          source_origin: 'jira-ai-insights'
+        });
+    }
             recommendations: Array.isArray(analysis.budget_recommendations) 
               ? analysis.budget_recommendations 
               : [analysis.budget_recommendations || "Análise de custos concluída"]
@@ -987,12 +1006,6 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
       issues_with_costs: costData,
       ...analysis
     };
-
-  } catch (error) {
-    console.error('Failed to perform cost analysis:', error);
-    throw error;
-  }
-}
 
 async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, jiraProjectId?: string) {
   // Get all available project keys if none specified
@@ -1102,19 +1115,28 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
     
     const analysis = JSON.parse(content);
 
-    // Store insight in database
+    // Store insight in unified_insights
     if (jiraProjectId) {
       await supabaseClient
-        .from('jira_ai_insights')
+        .from('unified_insights')
         .insert({
-          project_id: jiraProjectId,
           insight_type: 'productivity_economics',
-          confidence_score: analysis.team_productivity_score || 0.8,
-          insight_data: {
+          source_type: 'jira',
+          title: 'Análise de Produtividade',
+          content: JSON.stringify({
             ...analysis,
             productivity_data: productivityData
+          }),
+          metadata: {
+            team_productivity_score: analysis.team_productivity_score,
+            productivity_data: productivityData
           },
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
+          confidence_score: analysis.team_productivity_score || 0.8,
+          project_id: jiraProjectId,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          source_origin: 'jira-ai-insights'
+        });
+    }
         });
     }
 
@@ -1122,12 +1144,6 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
       productivity_data: productivityData,
       ...analysis
     };
-
-  } catch (error) {
-    console.error('Failed to analyze productivity economics:', error);
-    throw error;
-  }
-}
 
 async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, jiraProjectId?: string) {
   // Get all available project keys if none specified
@@ -1229,19 +1245,32 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
     
     const analysis = JSON.parse(content);
 
-    // Store insight in database
+    // Store insight in unified_insights
     if (jiraProjectId) {
       await supabaseClient
-        .from('jira_ai_insights')
+        .from('unified_insights')
         .insert({
-          project_id: jiraProjectId,
           insight_type: 'budget_alerts',
-          confidence_score: analysis.financial_risk_score || 0.5,
-          insight_data: {
+          source_type: 'jira',
+          title: 'Alertas de Orçamento',
+          content: JSON.stringify({
             ...analysis,
             projected_total_cost: projectedTotalCost,
             current_spend: totalBudgetSpent,
-            spend_rate: spendRate,
+            spend_rate: spendRate
+          }),
+          metadata: {
+            financial_risk_score: analysis.financial_risk_score,
+            projected_total_cost: projectedTotalCost,
+            current_spend: totalBudgetSpent,
+            spend_rate: spendRate
+          },
+          confidence_score: analysis.financial_risk_score || 0.5,
+          project_id: jiraProjectId,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          source_origin: 'jira-ai-insights'
+        });
+    }
             completion_rate: completionRate,
             recommendations: Array.isArray(analysis.optimization_suggestions) 
               ? analysis.optimization_suggestions 
@@ -1258,9 +1287,3 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
       completion_rate: completionRate,
       ...analysis
     };
-
-  } catch (error) {
-    console.error('Failed to generate budget alerts:', error);
-    throw error;
-  }
-}

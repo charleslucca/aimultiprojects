@@ -88,12 +88,13 @@ const JiraCockpitProject: React.FC = () => {
         // Load AI insights for jira projects AND GitHub insights for this project
         const jiraProjectIds = jiraProjectData.map(jp => jp.id);
         
-        // Load Jira insights
+        // Load Jira insights from unified_insights
         const { data: jiraInsightsData, error: jiraInsightsError } = await supabase
-          .from('jira_ai_insights')
+          .from('unified_insights')
           .select('*')
+          .eq('source_type', 'jira')
           .in('project_id', jiraProjectIds)
-          .order('generated_at', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(50);
 
         if (jiraInsightsError) throw jiraInsightsError;
@@ -114,7 +115,7 @@ const JiraCockpitProject: React.FC = () => {
           ...(jiraInsightsData || []).map(insight => ({
             ...insight,
             source: 'jira',
-            generated_at: insight.generated_at || insight.created_at
+            generated_at: insight.created_at
           })),
           ...(githubInsightsData || []).map(insight => ({
             ...insight,
