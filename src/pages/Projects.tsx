@@ -150,27 +150,31 @@ export default function Projects() {
         .select(`
           *,
           clients(name, status_color),
-          project_integrations(*)
+          project_integrations(id, integration_type, integration_subtype, is_active, configuration, metadata)
         `)
         .order('name');
 
       if (projectsError) throw projectsError;
 
-      // Check which projects have integrations - force fresh data  
-      const { data: integrations } = await supabase
-        .from('project_integrations')
-        .select('id, project_id, integration_type, is_active');
+      // Process projects with integrations data from the single query
+      const projectsWithIntegrations = (projectsData || []).map(project => {
+        // Filter only active integrations from the included data
+        const activeIntegrations = (project.project_integrations || []).filter(
+          (integration: any) => integration.is_active === true
+        );
+        
+        console.log(`Project "${project.name}": ${activeIntegrations.length} active integrations`, activeIntegrations);
+        
+        return {
+          ...project,
+          integrations: activeIntegrations
+        };
+      });
 
-      const projectsWithIntegrations = (projectsData || []).map(project => ({
-        ...project,
-        integrations: integrations?.filter(integration => 
-          integration.project_id === project.id && integration.is_active
-        ) || []
-      }));
-
+      console.log('Total projects loaded:', projectsWithIntegrations?.length);
+      console.log('Projects with integrations:', projectsWithIntegrations.filter(p => p.integrations.length > 0).length);
+      
       setProjects(projectsWithIntegrations);
-      setClients(clientsWithCounts);
-      console.log('Projects loaded:', projectsWithIntegrations?.length, 'projects with integrations');
     } catch (error: any) {
       console.error('Error loading data:', error);
       toast({
