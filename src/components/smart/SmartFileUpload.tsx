@@ -74,12 +74,6 @@ export function SmartFileUpload({
     }
 
     const fileId = crypto.randomUUID();
-    const sanitizedName = file.name
-      .replace(/[^a-zA-Z0-9.\-_]/g, '_')
-      .replace(/_{2,}/g, '_')
-      .toLowerCase();
-    const fileName = `${user.id}/${sessionType}/${sessionId}/${stageName}/${fileId}_${sanitizedName}`;
-
     const uploadProgress: UploadProgress = {
       file,
       progress: 0,
@@ -88,6 +82,67 @@ export function SmartFileUpload({
     };
     
     setUploading(prev => [...prev, uploadProgress]);
+
+    // Try Direct OpenAI Analysis first (Fase 1)
+    try {
+      setUploading(prev => prev.map(up => 
+        up.id === fileId ? { ...up, progress: 20, status: 'processing' } : up
+      ));
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('chatId', sessionId);
+      formData.append('message', 'Analise este arquivo e extraia as informações mais importantes para projetos digitais.');
+
+      console.log('Attempting direct OpenAI analysis...');
+      
+      const directResponse = await supabase.functions.invoke('direct-file-analysis', {
+        body: formData,
+      });
+
+      if (directResponse.data?.success) {
+        console.log('Direct analysis successful!');
+        
+        setUploading(prev => prev.map(up => 
+          up.id === fileId ? { ...up, progress: 100, status: 'completed' } : up
+        ));
+
+        // Create a direct result without traditional upload
+        const directResult: UploadedFile = {
+          id: fileId,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: file.size,
+          file_path: 'direct-analysis',
+          processing_status: 'completed',
+          created_at: new Date().toISOString(),
+          ai_analysis: {
+            extracted_content: directResponse.data.analysis,
+            processing_time: directResponse.data.processingTime,
+            method: 'direct_openai'
+          }
+        };
+
+        setTimeout(() => {
+          setUploading(prev => prev.filter(up => up.id !== fileId));
+        }, 2000);
+
+        return directResult;
+      }
+    } catch (directError) {
+      console.warn('Direct analysis failed, falling back to traditional upload:', directError);
+      setUploading(prev => prev.map(up => 
+        up.id === fileId ? { ...up, progress: 0, status: 'uploading' } : up
+      ));
+    }
+
+    // Fallback to traditional upload
+
+    const sanitizedName = file.name
+      .replace(/[^a-zA-Z0-9.\-_]/g, '_')
+      .replace(/_{2,}/g, '_')
+      .toLowerCase();
+    const fileName = `${user.id}/${sessionType}/${sessionId}/${stageName}/${fileId}_${sanitizedName}`;
 
     try {
       // Upload to smart-hub-files bucket
@@ -327,11 +382,11 @@ export function SmartFileUpload({
                     <p className="text-sm font-medium truncate">{upload.file.name}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <Progress value={upload.progress} className="h-1 flex-1" />
-                      <span className="text-xs text-muted-foreground">
+                       <span className="text-xs text-muted-foreground">
                         {upload.status === 'uploading' ? 'Enviando...' :
-                         upload.status === 'processing' ? 'Processando...' :
+                         upload.status === 'processing' ? 'Análise Direta OpenAI...' :
                          upload.status === 'completed' ? 'Concluído' : 'Erro'}
-                      </span>
+                       </span>
                     </div>
                     {upload.error && (
                       <p className="text-xs text-destructive mt-1">{upload.error}</p>
@@ -380,6 +435,24 @@ export function SmartFileUpload({
                       <p className="text-xs text-muted-foreground mt-1 truncate">
                         Transcrição: {file.transcription.slice(0, 100)}...
                       </p>
+                    )}
+                    {file.ai_analysis?.extracted_content && (
+                      <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
+                        <div className="flex items-center gap-1 mb-1">
+                          <CheckCircle className="h-3 w-3 text-success" />
+                          <span className="font-medium text-success">
+                            Análise Completa {file.ai_analysis.method === 'direct_openai' ? '(OpenAI Direto)' : ''}
+                          </span>
+                          {file.ai_analysis.processing_time && (
+                            <span className="text-muted-foreground">
+                              • {file.ai_analysis.processing_time}
+                            </span>
+                          )}
+                        </div>
+                        <p className="line-clamp-2 text-muted-foreground">
+                          {file.ai_analysis.extracted_content.slice(0, 150)}...
+                        </p>
+                      </div>
                     )}
                   </div>
                   <Button
