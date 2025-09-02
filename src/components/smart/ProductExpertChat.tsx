@@ -177,6 +177,28 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
     const controller = new AbortController();
     setRequestController(controller);
 
+    // Add timeout for frontend (25 seconds to match backend)
+    const frontendTimeout = setTimeout(() => {
+      if (!controller.signal.aborted) {
+        controller.abort();
+        setIsProcessing(false);
+        
+        const timeoutMessage: ChatMessage = {
+          role: 'assistant',
+          content: `⏰ **Timeout do processamento (25s)**\n\n**Seus arquivos foram salvos automaticamente.** O processamento estava demorando mais que o esperado.\n\n💡 **Próximos passos:**\n- Aguarde 2-3 minutos antes de tentar novamente\n- Tente com arquivos menores se possível\n- Se persistir, recarregue a página`,
+          timestamp: new Date().toISOString(),
+        };
+        
+        setMessages(prev => [...prev, timeoutMessage]);
+        
+        toast({
+          title: "Timeout do processamento",
+          description: "Processamento demorou mais que 25 segundos. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    }, 25000);
+
     try {
       setIsProcessing(true);
       setLastSendTime(now);
@@ -199,6 +221,7 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
           type: file.file_type,
           size: file.file_size,
           file_name: file.file_name,
+          file_path: file.file_path,
           transcription: file.transcription,
           ai_analysis: file.ai_analysis,
           processing_status: file.processing_status
@@ -216,12 +239,14 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
       setMessages(prev => [...prev, userMessage]);
       setInputMessage("");
 
-      // Call AI expert with complete attachment data and timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Frontend timeout after 30 seconds')), 30000);
+      console.log('Calling product-expert-chat with optimized parameters:', {
+        chatId: chatIdToUse,
+        message: inputMessage,
+        attachments: allAttachments.length
       });
 
-      const apiPromise = supabase.functions.invoke('product-expert-chat', {
+      // Call AI expert with complete attachment data
+      const { data, error } = await supabase.functions.invoke('product-expert-chat', {
         body: {
           chatId: chatIdToUse,
           message: inputMessage,
@@ -229,14 +254,27 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
         }
       });
 
-      const { data, error } = await Promise.race([apiPromise, timeoutPromise]) as any;
+      clearTimeout(frontendTimeout);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw error;
+      }
+
+      console.log('Response from product-expert-chat:', data);
+
+      // Handle different response formats and error states
+      let responseContent = data.response || data.user_message || 'Resposta não disponível';
+      
+      // Check for specific error states from backend
+      if (data.error === 'temporary_overload' || data.error === 'circuit_breaker_open') {
+        responseContent = `⚠️ ${data.user_message}\n\n💡 **Dica**: Seus arquivos foram salvos. Aguarde o tempo sugerido antes de tentar novamente.`;
+      }
 
       // Add AI response
       const aiMessage: ChatMessage = {
         role: 'assistant',
-        content: data.response,
+        content: responseContent,
         timestamp: new Date().toISOString(),
         artifacts: data.artifacts
       };
@@ -247,52 +285,79 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
       setAttachments([]);
       setShowUpload(false);
 
-      toast({
-        title: "Resposta gerada",
-        description: `Usando modelo: ${data.model_used}`,
-      });
+      // Show success message with model info
+      if (data.model_used && !data.error) {
+        toast({
+          title: "Resposta gerada com sucesso",
+          description: `Modelo: ${data.model_used}${data.artifacts ? ' | Artefatos gerados' : ''}`,
+        });
+      }
 
     } catch (error: any) {
+      clearTimeout(frontendTimeout);
+      
       // Check if request was aborted
       if (controller.signal.aborted) {
-        console.log('Request was aborted');
+        console.log('Request was aborted by user or timeout');
         return;
       }
+      
       console.error('Error sending message:', error);
       
-      // Determine user-friendly error message based on error type
-      let errorMessage = 'Ocorreu um erro inesperado. Tente novamente.';
+      // Enhanced error handling based on backend error types
+      let errorMessage = 'Erro desconhecido. Tente novamente.';
+      let suggestions = [
+        'Tente novamente em alguns instantes',
+        'Se o problema persistir, recarregue a página',
+        'Verifique se os arquivos não são muito grandes (máx. 8MB cada)'
+      ];
       
-      if (error.message?.includes('timeout') || error.message?.includes('408') || error.message?.includes('Frontend timeout')) {
-        errorMessage = 'Processamento demorou mais que o esperado (30s). Tente com arquivos menores ou aguarde alguns minutos.';
-      } else if (error.message?.includes('503') || error.message?.includes('Service') || error.message?.includes('circuit_breaker')) {
-        errorMessage = 'Serviço em recuperação após sobrecarga. Aguarde 3-5 minutos antes de tentar novamente.';
+      if (error.message?.includes('FunctionsHttpError') || error.message?.includes('500')) {
+        errorMessage = 'Serviço temporariamente sobrecarregado ou com erro interno.';
+        suggestions = [
+          'Aguarde 2-3 minutos antes de tentar novamente',
+          'Seus arquivos foram salvos automaticamente',
+          'Se persistir, tente com arquivos menores'
+        ];
+      } else if (error.message?.includes('timeout') || error.message?.includes('408')) {
+        errorMessage = 'Processamento demorou mais que o esperado (>25s).';
+        suggestions = [
+          'Tente com arquivos menores',
+          'Aguarde alguns minutos entre tentativas',
+          'Divida arquivos grandes em partes menores'
+        ];
+      } else if (error.message?.includes('503') || error.message?.includes('circuit_breaker')) {
+        errorMessage = 'Serviço em recuperação após sobrecarga detectada.';
+        suggestions = [
+          'Aguarde 3-5 minutos antes de tentar novamente',
+          'O sistema está se recuperando automaticamente',
+          'Seus arquivos foram preservados'
+        ];
       } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
-        errorMessage = 'Problema de conexão. Verifique sua internet e tente novamente.';
-      } else if (error.message?.includes('500')) {
-        errorMessage = 'Erro interno do servidor. Aguarde alguns minutos e tente novamente.';
-      } else if (error.message?.includes('temporary_overload')) {
-        errorMessage = 'Serviço temporariamente sobrecarregado. Aguarde 3 minutos antes de tentar novamente.';
+        errorMessage = 'Problema de conexão de rede.';
+        suggestions = [
+          'Verifique sua conexão com a internet',
+          'Tente recarregar a página',
+          'Aguarde alguns segundos e tente novamente'
+        ];
       }
 
-      // Add error message to chat
+      // Add enhanced error message to chat
       const errorAiMessage: ChatMessage = {
         role: 'assistant',
         content: `❌ **Erro**: ${errorMessage}
 
 💡 **Sugestões:**
-- Tente novamente em alguns instantes
-- Se o problema persistir, recarregue a página
-- Verifique se os arquivos não são muito grandes (máx. 10MB)
+${suggestions.map(s => `- ${s}`).join('\n')}
 
-Seus arquivos foram salvos automaticamente.`,
+🔄 **Status**: Seus arquivos foram salvos automaticamente e serão processados na próxima tentativa.`,
         timestamp: new Date().toISOString()
       };
 
       setMessages(prev => [...prev, errorAiMessage]);
 
       toast({
-        title: "Erro ao processar mensagem",
+        title: "Erro no processamento",
         description: errorMessage,
         variant: "destructive"
       });

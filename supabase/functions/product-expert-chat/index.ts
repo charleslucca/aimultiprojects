@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Specialized system prompt for digital product expert
+// Optimized system prompt for conversational + artifact generation
 const EXPERT_SYSTEM_PROMPT = `Você é um especialista sênior em produtos e projetos digitais com mais de 15 anos de experiência. Sua especialidade é analisar requisitos, extrair personas, definir escopos e gerar artefatos profissionais.
 
 SUAS CAPACIDADES:
@@ -18,34 +18,45 @@ SUAS CAPACIDADES:
 5. **Product Backlog**: Cria User Stories com Definition of Done
 6. **Escopo de Entrega**: Memorial descritivo para contratos
 
-COMPORTAMENTO AUTOMÁTICO COM ARQUIVOS:
-**CRÍTICO**: Quando o usuário anexar arquivos (transcrições, documentos, etc.), você DEVE automaticamente:
-1. Analisar todo o conteúdo dos arquivos anexados
-2. Extrair personas, requisitos e escopo automaticamente
-3. Gerar pelo menos 2-3 artefatos relevantes baseados no conteúdo
-4. Sugerir próximos passos para o projeto
-5. Sempre que possível, gerar Business Model Canvas, Product Backlog E Escopo de Entrega
+COMPORTAMENTO COM ARQUIVOS:
+Quando o usuário anexar arquivos, você DEVE:
+1. **Responder conversacionalmente** explicando o que encontrou
+2. **Extrair automaticamente** personas, requisitos e insights
+3. **Gerar artefatos estruturados** quando apropriado
+4. **Sugerir próximos passos** de forma natural
 
-FORMATO DE RESPOSTA:
-Sempre que possível, gere artefatos estruturados em JSON no seguinte formato:
+FORMATO DE RESPOSTA HÍBRIDO:
+1. **SEMPRE responda de forma conversacional primeiro** - explique o que analisou
+2. **QUANDO apropriado**, adicione artefatos estruturados em JSON:
+
+\`\`\`json
 {
   "type": "artifact",
   "artifact_type": "business_model_canvas|product_backlog|delivery_scope|personas|requirements",
+  "title": "Nome do Artefato",
   "content": {
     // Conteúdo estruturado do artefato
   }
 }
+\`\`\`
 
-INSTRUÇÕES ESPECIAIS:
-- **SEMPRE analise arquivos anexados automaticamente** - não espere o usuário pedir
-- Seja sempre preciso e baseado em dados dos arquivos
-- Use linguagem profissional e clara
-- Priorize informações extraídas dos arquivos anexados
-- Quando houver arquivos, SEMPRE gere pelo menos uma análise inicial
-- Para User Stories, sempre inclua critérios de aceitação e Definition of Done
-- Se houver transcrição de reunião, extraia automaticamente requisitos e personas
+DIRETRIZES:
+- **Seja conversacional e humano** - não robótico
+- **Explique seu raciocínio** e achados importantes
+- **Gere artefatos automaticamente** quando houver conteúdo suficiente
+- **Para reuniões/transcrições**: extraia personas e requisitos automaticamente
+- **Para documentos técnicos**: foque em requisitos e arquitetura
+- **Sempre sugira próximos passos** de forma natural
+- **Use linguagem profissional mas acessível**
 
-Agora aguarde o usuário anexar documentos ou fazer perguntas sobre seu projeto.`;
+EXEMPLO DE BOA RESPOSTA:
+"Analisei o documento anexado e identifiquei informações valiosas sobre o projeto. Encontrei 3 personas principais e 15 requisitos funcionais bem definidos.
+
+Com base no conteúdo, preparei um Business Model Canvas inicial e sugiro que o próximo passo seja validar as hipóteses de valor com usuários reais.
+
+[Seguido dos artefatos em JSON quando apropriado]"
+
+Seja sempre útil, preciso e orientado a resultados práticos.`;
 
 // Simple circuit breaker to prevent infinite loops
 const circuitBreaker = {
@@ -94,12 +105,12 @@ serve(async (req) => {
     );
   }
 
-  // Global timeout for the entire edge function (20 seconds)
+  // Global timeout for the entire edge function (15 seconds)
   const globalController = new AbortController();
   const globalTimeout = setTimeout(() => {
-    console.log('Global timeout reached (20s), aborting entire function');
+    console.log('Global timeout reached (15s), aborting entire function');
     globalController.abort();
-  }, 20000);
+  }, 15000);
 
   try {
     // Validate environment variables first
@@ -132,8 +143,8 @@ serve(async (req) => {
       
       const attachmentStartTime = Date.now();
       for (const attachment of attachments) {
-        // Skip if taking too long (max 8 seconds for all attachments)
-        if (Date.now() - attachmentStartTime > 8000) {
+        // Skip if taking too long (max 5 seconds for all attachments)
+        if (Date.now() - attachmentStartTime > 5000) {
           console.log('Attachment processing timeout - skipping remaining files');
           break;
         }
@@ -146,10 +157,10 @@ serve(async (req) => {
             fileContent = attachment.transcription;
             console.log(`Using transcription for ${attachment.name || attachment.file_name}`);
           } else if (attachment.path || attachment.file_path) {
-            // Fallback to download if no processed content (with 3s timeout)
+            // Fallback to download if no processed content (with 2s timeout)
             console.log(`Downloading file: ${attachment.path || attachment.file_path}`);
             const downloadController = new AbortController();
-            setTimeout(() => downloadController.abort(), 3000);
+            setTimeout(() => downloadController.abort(), 2000);
             
             const { data: fileData } = await supabase.storage
               .from('smart-hub-files')
@@ -158,8 +169,8 @@ serve(async (req) => {
             if (fileData) {
               fileContent = await fileData.text();
               // Limit content size to prevent huge payloads
-              if (fileContent.length > 10000) {
-                fileContent = fileContent.substring(0, 10000) + '\n\n[CONTEÚDO TRUNCADO - ARQUIVO MUITO GRANDE]';
+              if (fileContent.length > 8000) {
+                fileContent = fileContent.substring(0, 8000) + '\n\n[CONTEÚDO TRUNCADO - ARQUIVO MUITO GRANDE]';
               }
             }
           }
@@ -254,11 +265,11 @@ serve(async (req) => {
         // Handle different model parameter requirements
         if (model.includes('gpt-4o')) {
           // Legacy models use max_tokens and support temperature
-          requestBody.max_tokens = 600; // Reduced for faster response
-          requestBody.temperature = 0.5; // Lower temperature for consistency
+          requestBody.max_tokens = 400; // Optimized for faster response
+          requestBody.temperature = 0.3; // Lower temperature for consistency
         } else {
           // Newer models (GPT-5, GPT-4.1) use max_completion_tokens, no temperature
-          requestBody.max_completion_tokens = 600; // Reduced for faster response
+          requestBody.max_completion_tokens = 400; // Optimized for faster response
         }
 
         console.log(`Making request to ${model}...`);
@@ -299,7 +310,7 @@ serve(async (req) => {
     try {
       // Start with fastest and most reliable model
       console.log('Starting with GPT-4o-mini (fastest)...');
-      data = await makeOpenAICall('gpt-4o-mini', 8000); // 8 seconds
+      data = await makeOpenAICall('gpt-4o-mini', 5000); // 5 seconds
       modelUsed = 'gpt-4o-mini';
       circuitBreaker.recordSuccess();
     } catch (error) {
@@ -307,7 +318,7 @@ serve(async (req) => {
       try {
         // Try GPT-4.1 as fallback only
         console.log('Trying GPT-4.1 as fallback...');
-        data = await makeOpenAICall('gpt-4.1-2025-04-14', 10000); // 10 seconds
+        data = await makeOpenAICall('gpt-4.1-2025-04-14', 7000); // 7 seconds
         modelUsed = 'gpt-4.1-2025-04-14';
         circuitBreaker.recordSuccess();
       } catch (error2) {
@@ -336,18 +347,27 @@ serve(async (req) => {
     const aiResponse = data.choices[0].message.content;
     console.log('AI response received, length:', aiResponse.length);
 
-    // Try to extract structured artifacts from response
+    // Try to extract structured artifacts from response (improved extraction)
     let extractedArtifacts = null;
-    const jsonMatch = aiResponse.match(/```json\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) {
+    const jsonMatches = aiResponse.matchAll(/```json\s*(\{[\s\S]*?\})\s*```/g);
+    
+    for (const match of jsonMatches) {
       try {
-        const parsed = JSON.parse(jsonMatch[1]);
+        const parsed = JSON.parse(match[1]);
         if (parsed.type === 'artifact') {
-          extractedArtifacts = parsed;
+          if (!extractedArtifacts) {
+            extractedArtifacts = [];
+          }
+          extractedArtifacts.push(parsed);
         }
       } catch (e) {
         console.log('Failed to parse JSON artifact:', e.message);
       }
+    }
+    
+    // If single artifact, keep as object for backward compatibility
+    if (Array.isArray(extractedArtifacts) && extractedArtifacts.length === 1) {
+      extractedArtifacts = extractedArtifacts[0];
     }
 
     // Update chat in database if chatId provided
