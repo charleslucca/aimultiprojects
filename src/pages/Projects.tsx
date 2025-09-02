@@ -323,7 +323,7 @@ export default function Projects() {
           onProjectCreated={loadData}
         />
 
-        {selectedProject && (
+        {selectedProject && integrationModalOpen && (
           <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
             <div className="bg-background rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6 border-b">
