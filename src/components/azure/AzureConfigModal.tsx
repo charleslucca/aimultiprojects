@@ -85,9 +85,11 @@ const AzureConfigModal: React.FC<AzureConfigModalProps> = ({
       const { data, error } = await supabase.functions.invoke('azure-boards-sync', {
         body: {
           action: 'test_connection',
-          organization: formData.organization,
-          project: formData.project_name,
-          personal_access_token: formData.personal_access_token,
+          config: {
+            organization: formData.organization,
+            project: formData.project_name,
+            personal_access_token: formData.personal_access_token,
+          }
         }
       });
 

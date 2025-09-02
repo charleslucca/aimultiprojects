@@ -107,7 +107,8 @@ const AzureCockpitProject: React.FC = () => {
       const { data, error } = await supabase.functions.invoke('azure-boards-sync', {
         body: { 
           action: 'sync_integration', 
-          integration_id: integration.id 
+          integration_id: integration.id,
+          config: integration.configuration
         }
       });
 
