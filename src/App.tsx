@@ -15,6 +15,7 @@ import Team from "./pages/Team";
 import Academy from "./pages/Academy";
 import JiraCockpit from "./pages/JiraCockpit";
 import JiraCockpitProject from "./pages/JiraCockpitProject";
+import AzureCockpitProject from "./pages/AzureCockpitProject";
 import SmartHub from "./pages/SmartHub";
 import SmartDiscovery from "./pages/SmartDiscovery";
 import SmartDelivery from "./pages/SmartDelivery";
@@ -66,6 +67,7 @@ const App: React.FC = () => {
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/projects/:projectId/jira" element={<JiraCockpitProject />} />
+                  <Route path="/projects/:projectId/azure" element={<AzureCockpitProject />} />
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/team" element={<Team />} />
                   <Route path="/academy" element={<Academy />} />
