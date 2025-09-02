@@ -22,8 +22,7 @@ import {
 import { ProjectCard } from "@/components/ProjectCard";
 import { NewProjectModal } from "@/components/modals/NewProjectModal";
 import { DeleteConfirmationModal } from "@/components/modals/DeleteConfirmationModal";
-// Fixed import for JiraConfigModal (default export)
-import JiraConfigModal from "@/components/jira/JiraConfigModal";
+import { IntegrationManager } from "@/components/integrations/IntegrationManager";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,7 +49,11 @@ interface Project {
   client?: {
     name: string;
   };
-  jira_connected?: boolean;
+  integrations?: Array<{
+    id: string;
+    integration_type: string;
+    is_active: boolean;
+  }>;
 }
 
 export default function Projects() {
@@ -61,7 +64,7 @@ export default function Projects() {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [newProjectModalOpen, setNewProjectModalOpen] = useState(false);
-  const [jiraModalOpen, setJiraModalOpen] = useState(false);
+  const [integrationModalOpen, setIntegrationModalOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [deleteClientModal, setDeleteClientModal] = useState<{ isOpen: boolean; client: Client | null }>({
     isOpen: false,
@@ -151,17 +154,19 @@ export default function Projects() {
 
       if (projectsError) throw projectsError;
 
-      // Check which projects have Jira connections
-      const { data: jiraConfigs } = await supabase
-        .from('jira_configurations')
-        .select('client_id');
+      // Check which projects have integrations
+      const { data: integrations } = await supabase
+        .from('project_integrations')
+        .select('id, project_id, integration_type, is_active');
 
-      const projectsWithJira = (projectsData || []).map(project => ({
+      const projectsWithIntegrations = (projectsData || []).map(project => ({
         ...project,
-        jira_connected: jiraConfigs?.some(config => config.client_id === project.client_id) || false
+        integrations: integrations?.filter(integration => 
+          integration.project_id === project.id && integration.is_active
+        ) || []
       }));
 
-      setProjects(projectsWithJira);
+      setProjects(projectsWithIntegrations);
 
     } catch (error: any) {
       toast({
@@ -206,10 +211,9 @@ export default function Projects() {
     setExpandedClients(newExpanded);
   };
 
-  const handleConnectJira = (projectId: string) => {
-    const project = projects.find(p => p.id === projectId);
+  const handleManageIntegrations = (projectId: string) => {
     setSelectedProject(projectId);
-    setJiraModalOpen(true);
+    setIntegrationModalOpen(true);
   };
 
   const handleDeleteClient = async () => {
@@ -288,15 +292,11 @@ export default function Projects() {
             <ProjectCard
               key={project.id}
               project={project}
-              onConnectJira={handleConnectJira}
+              onManageIntegrations={handleManageIntegrations}
               onDelete={(projectId) => {
                 setProjects(prev => prev.filter(p => p.id !== projectId));
               }}
-              onDisconnectJira={(projectId) => {
-                setProjects(prev => prev.map(p => 
-                  p.id === projectId ? { ...p, jira_connected: false } : p
-                ));
-              }}
+              onIntegrationChanged={loadData}
             />
           ))}
         </div>
@@ -323,19 +323,33 @@ export default function Projects() {
           onProjectCreated={loadData}
         />
 
-        <JiraConfigModal
-          isOpen={jiraModalOpen}
-          onClose={() => {
-            setJiraModalOpen(false);
-            setSelectedProject(null);
-          }}
-          onSave={async () => {
-            await loadData();
-            setJiraModalOpen(false);
-            setSelectedProject(null);
-          }}
-          clientId={selectedProject ? projects.find(p => p.id === selectedProject)?.client_id : undefined}
-        />
+        {selectedProject && (
+          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-background rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Gerenciar Integrações</h2>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => {
+                      setIntegrationModalOpen(false);
+                      setSelectedProject(null);
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              </div>
+              <div className="p-6">
+                <IntegrationManager 
+                  projectId={selectedProject}
+                  clientId={projects.find(p => p.id === selectedProject)?.client_id}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -452,15 +466,11 @@ export default function Projects() {
                         <ProjectCard
                           key={project.id}
                           project={project}
-                          onConnectJira={handleConnectJira}
+                          onManageIntegrations={handleManageIntegrations}
                           onDelete={(projectId) => {
                             setProjects(prev => prev.filter(p => p.id !== projectId));
                           }}
-                          onDisconnectJira={(projectId) => {
-                            setProjects(prev => prev.map(p => 
-                              p.id === projectId ? { ...p, jira_connected: false } : p
-                            ));
-                          }}
+                          onIntegrationChanged={loadData}
                         />
                       ))}
                     </div>
@@ -506,20 +516,6 @@ export default function Projects() {
         open={newProjectModalOpen}
         onOpenChange={setNewProjectModalOpen}
         onProjectCreated={loadData}
-      />
-
-      <JiraConfigModal
-        isOpen={jiraModalOpen}
-        onClose={() => {
-          setJiraModalOpen(false);
-          setSelectedProject(null);
-        }}
-        onSave={async () => {
-          await loadData();
-          setJiraModalOpen(false);
-          setSelectedProject(null);
-        }}
-        clientId={selectedProject ? projects.find(p => p.id === selectedProject)?.client_id : undefined}
       />
 
       <DeleteConfirmationModal

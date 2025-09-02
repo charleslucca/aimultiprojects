@@ -39,18 +39,22 @@ interface Project {
   client?: {
     name: string;
   };
-  jira_connected?: boolean;
+  integrations?: Array<{
+    id: string;
+    integration_type: string;
+    is_active: boolean;
+  }>;
 }
 
 interface ProjectCardProps {
   project: Project;
   showClient?: boolean;
-  onConnectJira?: (projectId: string) => void;
+  onManageIntegrations?: (projectId: string) => void;
   onDelete?: (projectId: string) => void;
-  onDisconnectJira?: (projectId: string) => void;
+  onIntegrationChanged?: () => void;
 }
 
-export function ProjectCard({ project, showClient = false, onConnectJira, onDelete, onDisconnectJira }: ProjectCardProps) {
+export function ProjectCard({ project, showClient = false, onManageIntegrations, onDelete, onIntegrationChanged }: ProjectCardProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -86,8 +90,15 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
     }
   };
 
-  const handleJiraCockpit = () => {
-    navigate(`/projects/${project.id}/jira`);
+  const handleViewInsights = () => {
+    const jiraIntegration = project.integrations?.find(i => i.integration_type === 'jira' && i.is_active);
+    const azureIntegration = project.integrations?.find(i => i.integration_type === 'azure_boards' && i.is_active);
+    
+    if (jiraIntegration) {
+      navigate(`/projects/${project.id}/jira`);
+    } else if (azureIntegration) {
+      navigate(`/projects/${project.id}/azure`);
+    }
   };
 
   const handleDelete = async () => {
@@ -118,20 +129,24 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
     }
   };
 
-  const handleDisconnectJira = async () => {
+  const handleDisconnectIntegration = async (integrationId: string, integrationType: string) => {
     try {
-      // Remove Jira connection from project (update to set jira_connected = false)
-      // This would need to be implemented based on your data structure
-      
+      const { error } = await supabase
+        .from('project_integrations')
+        .update({ is_active: false })
+        .eq('id', integrationId);
+
+      if (error) throw error;
+
       toast({
-        title: "Jira desconectado",
-        description: `A conexão Jira foi removida do projeto "${project.name}".`,
+        title: "Integração desconectada",
+        description: `A conexão ${integrationType} foi removida do projeto "${project.name}".`,
       });
 
-      onDisconnectJira?.(project.id);
+      onIntegrationChanged?.();
     } catch (error: any) {
       toast({
-        title: "Erro ao desconectar Jira",
+        title: "Erro ao desconectar integração",
         description: error.message,
         variant: "destructive",
       });
@@ -153,9 +168,11 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
   // Mock progress calculation (you might want to implement real logic)
   const progress = Math.min((Math.random() * 100), 100);
 
-  // Check if project has integrations (enhanced to check both Jira and other integrations)
-  const hasJiraIntegration = project.jira_connected;
-  const hasAnyIntegration = hasJiraIntegration; // This could be enhanced to check project_integrations table
+  // Check if project has integrations
+  const activeIntegrations = project.integrations?.filter(i => i.is_active) || [];
+  const hasJiraIntegration = activeIntegrations.some(i => i.integration_type === 'jira');
+  const hasAzureIntegration = activeIntegrations.some(i => i.integration_type === 'azure_boards');
+  const hasAnyIntegration = activeIntegrations.length > 0;
 
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200">
@@ -187,15 +204,16 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {project.jira_connected && (
-                  <>
-                    <DropdownMenuItem onClick={handleDisconnectJira}>
-                      <Unplug className="mr-2 h-4 w-4" />
-                      Desconectar Jira
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                  </>
-                )}
+                {activeIntegrations.map((integration) => (
+                  <DropdownMenuItem 
+                    key={integration.id}
+                    onClick={() => handleDisconnectIntegration(integration.id, integration.integration_type)}
+                  >
+                    <Unplug className="mr-2 h-4 w-4" />
+                    Desconectar {integration.integration_type === 'jira' ? 'Jira' : 'Azure Boards'}
+                  </DropdownMenuItem>
+                ))}
+                {activeIntegrations.length > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuItem 
                   onClick={() => setShowDeleteModal(true)}
                   className="text-red-600 focus:text-red-600"
@@ -244,37 +262,36 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
 
         {/* Action Buttons */}
         <div className="flex gap-2 pt-2">
-          {project.jira_connected ? (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="flex-1"
-              onClick={handleJiraCockpit}
-            >
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Ver Insights
-            </Button>
+          {hasAnyIntegration ? (
+            <>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={handleViewInsights}
+              >
+                <BarChart3 className="mr-2 h-4 w-4" />
+                Ver Insights
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => onManageIntegrations?.(project.id)}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                Gerenciar
+              </Button>
+            </>
           ) : (
             <Button 
               variant="outline" 
               size="sm" 
               className="flex-1"
-              onClick={() => onConnectJira?.(project.id)}
+              onClick={() => onManageIntegrations?.(project.id)}
             >
               <Settings className="mr-2 h-4 w-4" />
-              {hasAnyIntegration ? 'Gerenciar Integrações' : 'Conectar Ferramentas'}
-            </Button>
-          )}
-          
-          {!hasAnyIntegration && (
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              className="flex-1"
-              onClick={() => onConnectJira?.(project.id)}
-            >
-              <BarChart3 className="mr-2 h-4 w-4" />
-              Conectar Jira
+              Conectar Ferramentas
             </Button>
           )}
         </div>
