@@ -50,56 +50,96 @@ export default function OnePageView() {
   const loadClientsData = async () => {
     try {
       setLoading(true);
+      console.log('OnePageView: Loading clients data...');
 
       // Load clients with basic info
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*');
 
-      if (clientsError) throw clientsError;
+      if (clientsError) {
+        console.error('OnePageView: Error loading clients:', clientsError);
+        
+        // If it's a permission error or table doesn't exist, show empty state instead of error
+        if (clientsError.code === '42P01' || clientsError.code === 'PGRST116') {
+          console.log('OnePageView: Clients table not found or no access, showing empty state');
+          setClients([]);
+          setTotalMetrics({
+            totalClients: 0,
+            totalBudget: 0,
+            activeProjects: 0,
+            riskProjects: 0,
+          });
+          return;
+        }
+        
+        throw clientsError;
+      }
+
+      console.log('OnePageView: Loaded', clientsData?.length || 0, 'clients');
 
       // Load project metrics for each client
       const clientsWithMetrics = await Promise.all(
         (clientsData || []).map(async (client) => {
-          // Get projects for this client
-          const { data: projects } = await supabase
-            .from('projects')
-            .select('id, budget, status')
-            .eq('client_id', client.id);
+          try {
+            // Get projects for this client
+            const { data: projects } = await supabase
+              .from('projects')
+              .select('id, budget, status')
+              .eq('client_id', client.id);
 
-      // Load Jira issues count for projects of this client
-      const projectIds = projects?.map(p => p.id) || [];
-      
-      // Check if any projects have Jira connections
-      const { data: jiraConfigs } = await supabase
-        .from('jira_configurations')
-        .select('id, project_keys')
-        .eq('client_id', client.id);
+            // Load Jira issues count for projects of this client
+            const projectIds = projects?.map(p => p.id) || [];
+            
+            // Check if any projects have Jira connections
+            const { data: jiraConfigs } = await supabase
+              .from('jira_configurations')
+              .select('id, project_keys')
+              .eq('client_id', client.id);
 
-      let issuesCount = 0;
-      let hasJiraConnection = false;
+            let issuesCount = 0;
+            let hasJiraConnection = false;
 
-      if (jiraConfigs && jiraConfigs.length > 0) {
-        hasJiraConnection = true;
-        const { count } = await supabase
-          .from('jira_issues')
-          .select('*', { count: 'exact', head: true })
-          .in('config_id', jiraConfigs.map(c => c.id));
-        issuesCount = count || 0;
-      }
+            if (jiraConfigs && jiraConfigs.length > 0) {
+              hasJiraConnection = true;
+              try {
+                const { count } = await supabase
+                  .from('jira_issues')
+                  .select('*', { count: 'exact', head: true })
+                  .in('config_id', jiraConfigs.map(c => c.id));
+                issuesCount = count || 0;
+              } catch (jiraError) {
+                // Ignore Jira errors, just set count to 0
+                console.warn('OnePageView: Could not load Jira issues for client', client.id);
+                issuesCount = 0;
+              }
+            }
 
-          const totalBudget = projects?.reduce((sum, p) => sum + (p.budget || 0), 0) || 0;
-          const activeProjects = projects?.filter(p => p.status === 'active').length || 0;
-          const completionRate = Math.floor(Math.random() * 100); // Placeholder calculation
+            const totalBudget = projects?.reduce((sum, p) => sum + (p.budget || 0), 0) || 0;
+            const activeProjects = projects?.filter(p => p.status === 'active').length || 0;
+            const completionRate = Math.floor(Math.random() * 100); // Placeholder calculation
 
-          return {
-            ...client,
-            project_count: projects?.length || 0,
-            total_budget: totalBudget,
-            active_issues: issuesCount,
-            completion_rate: completionRate,
-            has_jira_connection: hasJiraConnection,
-          };
+            return {
+              ...client,
+              project_count: projects?.length || 0,
+              total_budget: totalBudget,
+              active_issues: issuesCount,
+              completion_rate: completionRate,
+              has_jira_connection: hasJiraConnection,
+            };
+          } catch (clientError) {
+            console.warn('OnePageView: Error loading data for client', client.id, clientError);
+            
+            // Return client with default values if there's an error
+            return {
+              ...client,
+              project_count: 0,
+              total_budget: 0,
+              active_issues: 0,
+              completion_rate: 0,
+              has_jira_connection: false,
+            };
+          }
         })
       );
 
@@ -113,13 +153,25 @@ export default function OnePageView() {
         riskProjects: clientsWithMetrics.filter(c => c.status_color === 'red').length,
       };
 
+      console.log('OnePageView: Calculated metrics:', metrics);
       setTotalMetrics(metrics);
 
     } catch (error: any) {
+      console.error('OnePageView: Error in loadClientsData:', error);
+      
       toast({
         title: "Erro ao carregar dados",
-        description: error.message,
+        description: "Não foi possível carregar os dados dos clientes. Tente novamente.",
         variant: "destructive",
+      });
+      
+      // Set empty state on error to prevent blank screen
+      setClients([]);
+      setTotalMetrics({
+        totalClients: 0,
+        totalBudget: 0,
+        activeProjects: 0,
+        riskProjects: 0,
       });
     } finally {
       setLoading(false);

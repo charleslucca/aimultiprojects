@@ -61,10 +61,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    console.log('AuthContext: Initializing auth...');
+    let isMounted = true;
+    
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.email);
+        
+        if (!isMounted) return;
         
         setSession(session);
         setUser(session?.user ?? null);
@@ -75,18 +80,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Future: cleanup user data
         }
         
+        // Only set loading to false after auth state change
         setLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (!isMounted) return;
+      
+      console.log('AuthContext: Initial session check:', { 
+        session: !!session, 
+        user: !!session?.user, 
+        error: !!error 
+      });
+      
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
+      
+      // Set timeout fallback to prevent infinite loading
+      setTimeout(() => {
+        if (isMounted) {
+          console.log('AuthContext: Fallback timeout - setting loading to false');
+          setLoading(false);
+        }
+      }, 3000);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

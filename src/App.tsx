@@ -35,7 +35,22 @@ const queryClient = new QueryClient({
   },
 });
 
+// Debug component to monitor app state (temporary)
+const AppDebugInfo = () => {
+  if (process.env.NODE_ENV !== 'development') return null;
+  
+  return (
+    <div className="fixed top-0 right-0 z-50 bg-black/80 text-white p-2 text-xs rounded-bl-lg">
+      <div>App: Loaded</div>
+      <div>Route: {window.location.pathname}</div>
+      <div>Time: {new Date().toLocaleTimeString()}</div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
+  console.log('App: Rendering at', new Date().toISOString());
+  
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
@@ -43,25 +58,26 @@ const App: React.FC = () => {
           <TooltipProvider>
             <Toaster />
             <Sonner />
+            <AppDebugInfo />
             <BrowserRouter>
               <AppLayout>
-            <Routes>
-              <Route path="/" element={<OnePageView />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/projects" element={<Projects />} />
-              <Route path="/projects/:projectId/jira" element={<JiraCockpitProject />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/team" element={<Team />} />
-              <Route path="/academy" element={<Academy />} />
-              <Route path="/smart-hub" element={<SmartHub />} />
-              <Route path="/smart-hub/discovery" element={<SmartDiscovery />} />
-              <Route path="/smart-hub/discovery/:sessionId" element={<SmartDiscovery />} />
-              <Route path="/smart-hub/delivery" element={<SmartDelivery />} />
-              <Route path="/smart-hub/delivery/:sessionId" element={<SmartDelivery />} />
-              <Route path="/settings" element={<Settings />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+                <Routes>
+                  <Route path="/" element={<OnePageView />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/projects/:projectId/jira" element={<JiraCockpitProject />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/team" element={<Team />} />
+                  <Route path="/academy" element={<Academy />} />
+                  <Route path="/smart-hub" element={<SmartHub />} />
+                  <Route path="/smart-hub/discovery" element={<SmartDiscovery />} />
+                  <Route path="/smart-hub/discovery/:sessionId" element={<SmartDiscovery />} />
+                  <Route path="/smart-hub/delivery" element={<SmartDelivery />} />
+                  <Route path="/smart-hub/delivery/:sessionId" element={<SmartDelivery />} />
+                  <Route path="/settings" element={<Settings />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
               </AppLayout>
             </BrowserRouter>
           </TooltipProvider>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
-import { Bell, Search } from 'lucide-react';
+import { Bell, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,13 +10,39 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
-  const { user } = useAuth();
+// Loading screen component
+const LoadingScreen = () => (
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="text-center space-y-4">
+      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+      <p className="text-muted-foreground">Carregando aplicação...</p>
+    </div>
+  </div>
+);
 
-  if (!user) {
-    return <>{children}</>;
+// Minimal layout for auth pages
+const MinimalLayout: React.FC<AppLayoutProps> = ({ children }) => (
+  <div className="min-h-screen bg-background">
+    {children}
+  </div>
+);
+
+export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  console.log('AppLayout render:', { user: !!user, loading });
+
+  // Show loading screen during auth initialization
+  if (loading) {
+    return <LoadingScreen />;
   }
 
+  // Show minimal layout for unauthenticated users
+  if (!user) {
+    return <MinimalLayout>{children}</MinimalLayout>;
+  }
+
+  // Full layout for authenticated users
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
