@@ -95,8 +95,9 @@ export default function Projects() {
   const loadData = async () => {
     try {
       setLoading(true);
+      console.log('Loading projects data...');
 
-      // Load clients
+      // Load clients - force fresh data
       const { data: clientsData, error: clientsError } = await supabase
         .from('clients')
         .select('*')
@@ -143,18 +144,19 @@ export default function Projects() {
 
       setClients(clientsWithCounts);
 
-      // Load projects with client info
+      // Load projects with client information and integrations - force fresh data
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select(`
           *,
-          client:clients(name)
+          clients(name, status_color),
+          project_integrations(*)
         `)
         .order('name');
 
       if (projectsError) throw projectsError;
 
-      // Check which projects have integrations
+      // Check which projects have integrations - force fresh data  
       const { data: integrations } = await supabase
         .from('project_integrations')
         .select('id, project_id, integration_type, is_active');
@@ -167,8 +169,10 @@ export default function Projects() {
       }));
 
       setProjects(projectsWithIntegrations);
-
+      setClients(clientsWithCounts);
+      console.log('Projects loaded:', projectsWithIntegrations?.length, 'projects with integrations');
     } catch (error: any) {
+      console.error('Error loading data:', error);
       toast({
         title: "Erro ao carregar dados",
         description: error.message,
@@ -346,6 +350,7 @@ export default function Projects() {
                   projectId={selectedProject}
                   clientId={projects.find(p => p.id === selectedProject)?.client_id}
                   onIntegrationAdded={() => {
+                    console.log('Integration added callback triggered, reloading data...');
                     loadData();
                     setIntegrationModalOpen(false);
                     setSelectedProject(null);
@@ -556,6 +561,7 @@ export default function Projects() {
                 projectId={selectedProject}
                 clientId={projects.find(p => p.id === selectedProject)?.client_id}
                 onIntegrationAdded={() => {
+                  console.log('Integration added callback triggered (modal), reloading data...');
                   loadData();
                   setIntegrationModalOpen(false);
                   setSelectedProject(null);

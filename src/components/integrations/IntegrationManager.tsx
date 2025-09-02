@@ -169,9 +169,13 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       setTestResult({});
       loadIntegrations();
       
-      // Notify parent component
+      // Notify parent component with delay to ensure DB transaction is complete
       if (onIntegrationAdded) {
-        onIntegrationAdded();
+        console.log('Integration added, notifying parent in 300ms...');
+        setTimeout(() => {
+          console.log('Calling onIntegrationAdded callback');
+          onIntegrationAdded();
+        }, 300);
       }
     } catch (error: any) {
       toast({
