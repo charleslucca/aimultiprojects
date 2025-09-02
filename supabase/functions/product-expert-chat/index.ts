@@ -58,59 +58,13 @@ Com base no conteúdo, preparei um Business Model Canvas inicial e sugiro que o 
 
 Seja sempre útil, preciso e orientado a resultados práticos.`;
 
-// Simple circuit breaker to prevent infinite loops
-const circuitBreaker = {
-  failures: 0,
-  lastFailure: 0,
-  isOpen: function() {
-    const now = Date.now();
-    // Circuit opens after 3 failures within 2 minutes
-    if (this.failures >= 3 && (now - this.lastFailure) < 120000) {
-      return true;
-    }
-    // Reset after 5 minutes
-    if ((now - this.lastFailure) > 300000) {
-      this.failures = 0;
-    }
-    return false;
-  },
-  recordFailure: function() {
-    this.failures++;
-    this.lastFailure = Date.now();
-  },
-  recordSuccess: function() {
-    this.failures = 0;
-  }
-};
+// Direct proxy to OpenAI - no circuit breaker needed
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-
-  // Check circuit breaker first
-  if (circuitBreaker.isOpen()) {
-    console.log('Circuit breaker is open - refusing request');
-    return new Response(
-      JSON.stringify({
-        error: 'circuit_breaker_open',
-        user_message: 'Serviço em recuperação após sobrecarga. Aguarde alguns minutos.',
-        retry_after: 300
-      }),
-      {
-        status: 503,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '300' },
-      }
-    );
-  }
-
-  // Global timeout for the entire edge function (15 seconds)
-  const globalController = new AbortController();
-  const globalTimeout = setTimeout(() => {
-    console.log('Global timeout reached (15s), aborting entire function');
-    globalController.abort();
-  }, 15000);
 
   try {
     // Validate environment variables first
@@ -136,41 +90,28 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Process attachments with their processed content (with timeout protection)
+    // Process attachments - simple and fast
     let attachmentContext = '';
     if (attachments && attachments.length > 0) {
       console.log(`Processing ${attachments.length} attachments`);
       
-      const attachmentStartTime = Date.now();
       for (const attachment of attachments) {
-        // Skip if taking too long (max 5 seconds for all attachments)
-        if (Date.now() - attachmentStartTime > 5000) {
-          console.log('Attachment processing timeout - skipping remaining files');
-          break;
-        }
-
         try {
           let fileContent = '';
           
-          // Use processed content if available (transcription from database)
+          // Use processed content if available
           if (attachment.transcription) {
             fileContent = attachment.transcription;
-            console.log(`Using transcription for ${attachment.name || attachment.file_name}`);
           } else if (attachment.path || attachment.file_path) {
-            // Fallback to download if no processed content (with 2s timeout)
-            console.log(`Downloading file: ${attachment.path || attachment.file_path}`);
-            const downloadController = new AbortController();
-            setTimeout(() => downloadController.abort(), 2000);
-            
             const { data: fileData } = await supabase.storage
               .from('smart-hub-files')
               .download(attachment.path || attachment.file_path);
             
             if (fileData) {
               fileContent = await fileData.text();
-              // Limit content size to prevent huge payloads
-              if (fileContent.length > 8000) {
-                fileContent = fileContent.substring(0, 8000) + '\n\n[CONTEÚDO TRUNCADO - ARQUIVO MUITO GRANDE]';
+              // Reasonable content limit
+              if (fileContent.length > 15000) {
+                fileContent = fileContent.substring(0, 15000) + '\n\n[CONTEÚDO TRUNCADO]';
               }
             }
           }
@@ -178,20 +119,17 @@ serve(async (req) => {
           if (fileContent) {
             attachmentContext += `\n\n=== ARQUIVO: ${attachment.name || attachment.file_name} ===\n`;
             attachmentContext += `Tipo: ${attachment.type || attachment.file_type || 'Desconhecido'}\n`;
-            attachmentContext += `Status: ${attachment.processing_status || 'Processado'}\n`;
             attachmentContext += `CONTEÚDO:\n${fileContent}`;
             
-            // Add AI analysis if available
             if (attachment.ai_analysis) {
               attachmentContext += `\n\nANÁLISE PRÉVIA:\n${JSON.stringify(attachment.ai_analysis, null, 2)}`;
             }
           }
         } catch (error) {
           console.error(`Error processing attachment ${attachment.name}:`, error.message);
-          attachmentContext += `\n\n=== ${attachment.name || attachment.file_name} ===\n[Erro ao processar arquivo: ${error.message}]`;
+          attachmentContext += `\n\n=== ${attachment.name || attachment.file_name} ===\n[Erro ao processar arquivo]`;
         }
       }
-      console.log(`Attachment processing completed in ${Date.now() - attachmentStartTime}ms`);
     }
 
     // Get chat history if chatId provided
@@ -242,213 +180,140 @@ serve(async (req) => {
     }
 
     console.log(`Sending request to OpenAI with ${messages.length} messages`);
-    const requestStartTime = Date.now();
 
-    // Optimized OpenAI API call with better timeout management
-    const makeOpenAICall = async (model: string, timeoutMs: number = 8000) => {
-      console.log(`Trying ${model} with ${timeoutMs}ms timeout...`);
+    // Simple direct call to OpenAI - like ChatGPT
+    try {
+      const requestBody = {
+        model: 'gpt-4o-mini', // Single reliable model
+        messages,
+        max_tokens: 1000, // Generous limit
+        temperature: 0.7, // Balanced creativity
+        stream: false,
+      };
+
+      console.log('Making direct request to OpenAI API...');
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OpenAI API error:', errorText);
+        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('OpenAI response received successfully');
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.log(`Timeout reached for ${model}, aborting...`);
-        controller.abort();
-      }, timeoutMs);
+      const aiResponse = data.choices[0].message.content;
 
-      try {
-        // Configure parameters based on model type
-        const requestBody: any = {
-          model,
-          messages,
-          stream: false,
+      console.log('AI response received, length:', aiResponse.length);
+
+      // Extract structured artifacts from response
+      let extractedArtifacts = null;
+      const jsonMatches = aiResponse.matchAll(/```json\s*(\{[\s\S]*?\})\s*```/g);
+      
+      for (const match of jsonMatches) {
+        try {
+          const parsed = JSON.parse(match[1]);
+          if (parsed.type === 'artifact') {
+            if (!extractedArtifacts) {
+              extractedArtifacts = [];
+            }
+            extractedArtifacts.push(parsed);
+          }
+        } catch (e) {
+          console.log('Failed to parse JSON artifact:', e.message);
+        }
+      }
+      
+      // If single artifact, keep as object for backward compatibility
+      if (Array.isArray(extractedArtifacts) && extractedArtifacts.length === 1) {
+        extractedArtifacts = extractedArtifacts[0];
+      }
+
+      // Update chat in database if chatId provided
+      if (chatId) {
+        const newMessage = {
+          role: 'assistant',
+          content: aiResponse,
+          timestamp: new Date().toISOString(),
+          artifacts: extractedArtifacts
         };
 
-        // Handle different model parameter requirements
-        if (model.includes('gpt-4o')) {
-          // Legacy models use max_tokens and support temperature
-          requestBody.max_tokens = 400; // Optimized for faster response
-          requestBody.temperature = 0.3; // Lower temperature for consistency
-        } else {
-          // Newer models (GPT-5, GPT-4.1) use max_completion_tokens, no temperature
-          requestBody.max_completion_tokens = 400; // Optimized for faster response
+        const userMessage = {
+          role: 'user',
+          content: message,
+          timestamp: new Date().toISOString(),
+          attachments: attachments.map((att: any) => ({
+            file_name: att.file_name,
+            file_type: att.file_type,
+            file_size: att.file_size
+          }))
+        };
+
+        const updatedMessages = [...conversationHistory, userMessage, newMessage];
+
+        await supabase
+          .from('smart_hub_chats')
+          .update({
+            messages: updatedMessages,
+            generated_artifacts: extractedArtifacts || {},
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', chatId);
+      }
+
+      return new Response(
+        JSON.stringify({
+          response: aiResponse,
+          artifacts: extractedArtifacts,
+          model_used: 'gpt-4o-mini'
+        }),
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         }
+      );
 
-        console.log(`Making request to ${model}...`);
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-        console.log(`Response received from ${model}, status: ${response.status} (took ${Date.now() - requestStartTime}ms)`);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`OpenAI API error details:`, errorText);
-          throw new Error(`OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`);
-        }
-
-        const result = await response.json();
-        console.log(`Successfully got response from ${model} (${result.choices[0].message.content.length} chars)`);
-        return result;
-        
-      } catch (error) {
-        clearTimeout(timeoutId);
-        console.error(`Error with ${model}:`, error.message);
-        throw error;
-      }
-    };
-
-    // Fast fallback strategy with optimized timeouts
-    let data;
-    let modelUsed = 'gpt-4o-mini';
-    
-    try {
-      // Start with fastest and most reliable model
-      console.log('Starting with GPT-4o-mini (fastest)...');
-      data = await makeOpenAICall('gpt-4o-mini', 5000); // 5 seconds
-      modelUsed = 'gpt-4o-mini';
-      circuitBreaker.recordSuccess();
-    } catch (error) {
-      console.log(`GPT-4o-mini failed: ${error.message}`);
-      try {
-        // Try GPT-4.1 as fallback only
-        console.log('Trying GPT-4.1 as fallback...');
-        data = await makeOpenAICall('gpt-4.1-2025-04-14', 7000); // 7 seconds
-        modelUsed = 'gpt-4.1-2025-04-14';
-        circuitBreaker.recordSuccess();
-      } catch (error2) {
-        console.error(`Both models failed - GPT-4o: ${error.message}, GPT-4.1: ${error2.message}`);
-        
-        // Record failure for circuit breaker
-        circuitBreaker.recordFailure();
-        
-        // Return fast fallback response
-        clearTimeout(globalTimeout);
-        return new Response(
-          JSON.stringify({
-            response: "⚠️ O serviço de IA está temporariamente sobrecarregado.\n\n**Seus arquivos foram salvos automaticamente.** Aguarde 2-3 minutos e tente novamente.\n\nSe o problema persistir, recarregue a página.",
-            artifacts: null,
-            model_used: 'fallback',
-            error: 'temporary_overload',
-            retry_after: 180
-          }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '180' },
-          }
-        );
-      }
+    } catch (openaiError) {
+      console.error('OpenAI API call failed:', openaiError);
+      throw openaiError;
     }
-
-    const aiResponse = data.choices[0].message.content;
-    console.log('AI response received, length:', aiResponse.length);
-
-    // Try to extract structured artifacts from response (improved extraction)
-    let extractedArtifacts = null;
-    const jsonMatches = aiResponse.matchAll(/```json\s*(\{[\s\S]*?\})\s*```/g);
-    
-    for (const match of jsonMatches) {
-      try {
-        const parsed = JSON.parse(match[1]);
-        if (parsed.type === 'artifact') {
-          if (!extractedArtifacts) {
-            extractedArtifacts = [];
-          }
-          extractedArtifacts.push(parsed);
-        }
-      } catch (e) {
-        console.log('Failed to parse JSON artifact:', e.message);
-      }
-    }
-    
-    // If single artifact, keep as object for backward compatibility
-    if (Array.isArray(extractedArtifacts) && extractedArtifacts.length === 1) {
-      extractedArtifacts = extractedArtifacts[0];
-    }
-
-    // Update chat in database if chatId provided
-    if (chatId) {
-      const newMessage = {
-        role: 'assistant',
-        content: aiResponse,
-        timestamp: new Date().toISOString(),
-        artifacts: extractedArtifacts
-      };
-
-      // Add user message and AI response to chat
-      const userMessage = {
-        role: 'user',
-        content: message,
-        timestamp: new Date().toISOString(),
-        attachments: attachments.map((att: any) => ({
-          file_name: att.file_name,
-          file_type: att.file_type,
-          file_size: att.file_size
-        }))
-      };
-
-      const updatedMessages = [...conversationHistory, userMessage, newMessage];
-
-      await supabase
-        .from('smart_hub_chats')
-        .update({
-          messages: updatedMessages,
-          generated_artifacts: extractedArtifacts || {},
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', chatId);
-    }
-
-    return new Response(
-      JSON.stringify({
-        response: aiResponse,
-        artifacts: extractedArtifacts,
-        model_used: modelUsed
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
 
   } catch (error) {
-    clearTimeout(globalTimeout);
-    console.error('Critical error in product-expert-chat:', {
-      message: error.message,
-      stack: error.stack,
-      timestamp: new Date().toISOString()
-    });
+    console.error('Error in product-expert-chat:', error);
     
-    // More specific error messages
-    let userMessage = 'Erro interno do servidor. Tente novamente.';
+    // Simple error handling
+    let userMessage = 'Erro interno. Tente novamente.';
     let statusCode = 500;
     
     if (error.message.includes('OPENAI_API_KEY')) {
-      userMessage = 'Configuração da API OpenAI não encontrada. Entre em contato com o suporte.';
+      userMessage = 'Chave da OpenAI não configurada.';
       statusCode = 503;
-    } else if (error.message.includes('timeout') || error.message.includes('aborted')) {
-      userMessage = 'O processamento está demorando mais que o esperado. Tente com arquivos menores ou aguarde alguns minutos.';
+    } else if (error.message.includes('429') || error.message.includes('rate')) {
+      userMessage = 'Muitas requisições. Aguarde alguns segundos.';
+      statusCode = 429;
+    } else if (error.message.includes('timeout')) {
+      userMessage = 'Timeout. Tente novamente.';
       statusCode = 408;
-    } else if (error.message.includes('Supabase')) {
-      userMessage = 'Problema de conectividade com o banco de dados. Tente novamente em instantes.';
-      statusCode = 503;
     }
     
     return new Response(
       JSON.stringify({
-        error: error.message,
-        user_message: userMessage,
-        timestamp: new Date().toISOString()
+        response: `❌ **Erro**: ${userMessage}\n\n💡 **Sugestão**: Tente novamente em alguns instantes. Se persistir, recarregue a página.`,
+        artifacts: null,
+        model_used: 'error',
+        error: 'api_error'
       }),
       {
         status: statusCode,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
-  } finally {
-    clearTimeout(globalTimeout);
   }
 });
