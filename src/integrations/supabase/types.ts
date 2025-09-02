@@ -50,6 +50,268 @@ export type Database = {
         }
         Relationships: []
       }
+      azure_iterations: {
+        Row: {
+          azure_id: string
+          created_at: string
+          finish_date: string | null
+          id: string
+          integration_id: string
+          name: string
+          path: string
+          project_id: string | null
+          raw_data: Json | null
+          start_date: string | null
+          state: string | null
+          synced_at: string | null
+        }
+        Insert: {
+          azure_id: string
+          created_at?: string
+          finish_date?: string | null
+          id?: string
+          integration_id: string
+          name: string
+          path: string
+          project_id?: string | null
+          raw_data?: Json | null
+          start_date?: string | null
+          state?: string | null
+          synced_at?: string | null
+        }
+        Update: {
+          azure_id?: string
+          created_at?: string
+          finish_date?: string | null
+          id?: string
+          integration_id?: string
+          name?: string
+          path?: string
+          project_id?: string | null
+          raw_data?: Json | null
+          start_date?: string | null
+          state?: string | null
+          synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "azure_iterations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "project_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "azure_iterations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "azure_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      azure_organizations: {
+        Row: {
+          azure_id: string
+          created_at: string
+          description: string | null
+          id: string
+          integration_id: string
+          organization_name: string
+          organization_url: string
+          raw_data: Json | null
+          synced_at: string | null
+        }
+        Insert: {
+          azure_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          integration_id: string
+          organization_name: string
+          organization_url: string
+          raw_data?: Json | null
+          synced_at?: string | null
+        }
+        Update: {
+          azure_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          integration_id?: string
+          organization_name?: string
+          organization_url?: string
+          raw_data?: Json | null
+          synced_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "azure_organizations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "project_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      azure_projects: {
+        Row: {
+          azure_id: string
+          created_at: string
+          description: string | null
+          id: string
+          integration_id: string
+          last_update_time: string | null
+          name: string
+          raw_data: Json | null
+          state: string | null
+          synced_at: string | null
+          visibility: string | null
+        }
+        Insert: {
+          azure_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          integration_id: string
+          last_update_time?: string | null
+          name: string
+          raw_data?: Json | null
+          state?: string | null
+          synced_at?: string | null
+          visibility?: string | null
+        }
+        Update: {
+          azure_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          integration_id?: string
+          last_update_time?: string | null
+          name?: string
+          raw_data?: Json | null
+          state?: string | null
+          synced_at?: string | null
+          visibility?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "azure_projects_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "project_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      azure_work_items: {
+        Row: {
+          activity: string | null
+          area_path: string | null
+          assigned_to: string | null
+          azure_id: number
+          changed_date: string | null
+          closed_date: string | null
+          completed_work: number | null
+          created_at: string
+          created_by: string | null
+          created_date: string | null
+          id: string
+          integration_id: string
+          iteration_path: string | null
+          original_estimate: number | null
+          parent_id: number | null
+          priority: number | null
+          project_id: string | null
+          raw_data: Json | null
+          reason: string | null
+          remaining_work: number | null
+          resolved_date: string | null
+          severity: string | null
+          state: string | null
+          story_points: number | null
+          synced_at: string | null
+          tags: string[] | null
+          title: string
+          work_item_type: string
+        }
+        Insert: {
+          activity?: string | null
+          area_path?: string | null
+          assigned_to?: string | null
+          azure_id: number
+          changed_date?: string | null
+          closed_date?: string | null
+          completed_work?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_date?: string | null
+          id?: string
+          integration_id: string
+          iteration_path?: string | null
+          original_estimate?: number | null
+          parent_id?: number | null
+          priority?: number | null
+          project_id?: string | null
+          raw_data?: Json | null
+          reason?: string | null
+          remaining_work?: number | null
+          resolved_date?: string | null
+          severity?: string | null
+          state?: string | null
+          story_points?: number | null
+          synced_at?: string | null
+          tags?: string[] | null
+          title: string
+          work_item_type: string
+        }
+        Update: {
+          activity?: string | null
+          area_path?: string | null
+          assigned_to?: string | null
+          azure_id?: number
+          changed_date?: string | null
+          closed_date?: string | null
+          completed_work?: number | null
+          created_at?: string
+          created_by?: string | null
+          created_date?: string | null
+          id?: string
+          integration_id?: string
+          iteration_path?: string | null
+          original_estimate?: number | null
+          parent_id?: number | null
+          priority?: number | null
+          project_id?: string | null
+          raw_data?: Json | null
+          reason?: string | null
+          remaining_work?: number | null
+          resolved_date?: string | null
+          severity?: string | null
+          state?: string | null
+          story_points?: number | null
+          synced_at?: string | null
+          tags?: string[] | null
+          title?: string
+          work_item_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "azure_work_items_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "project_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "azure_work_items_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "azure_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           contact_info: Json | null
@@ -1138,9 +1400,11 @@ export type Database = {
           configuration: Json
           created_at: string | null
           id: string
+          integration_subtype: string | null
           integration_type: string
           is_active: boolean | null
           last_sync_at: string | null
+          metadata: Json | null
           project_id: string
           sync_enabled: boolean | null
           updated_at: string | null
@@ -1150,9 +1414,11 @@ export type Database = {
           configuration: Json
           created_at?: string | null
           id?: string
+          integration_subtype?: string | null
           integration_type: string
           is_active?: boolean | null
           last_sync_at?: string | null
+          metadata?: Json | null
           project_id: string
           sync_enabled?: boolean | null
           updated_at?: string | null
@@ -1162,9 +1428,11 @@ export type Database = {
           configuration?: Json
           created_at?: string | null
           id?: string
+          integration_subtype?: string | null
           integration_type?: string
           is_active?: boolean | null
           last_sync_at?: string | null
+          metadata?: Json | null
           project_id?: string
           sync_enabled?: boolean | null
           updated_at?: string | null

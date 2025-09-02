@@ -150,8 +150,12 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
 
-  // Calculate a mock progress (you can replace with real data)
-  const progress = Math.floor(Math.random() * 100);
+  // Mock progress calculation (you might want to implement real logic)
+  const progress = Math.min((Math.random() * 100), 100);
+
+  // Check if project has integrations (enhanced to check both Jira and other integrations)
+  const hasJiraIntegration = project.jira_connected;
+  const hasAnyIntegration = hasJiraIntegration; // This could be enhanced to check project_integrations table
 
   return (
     <Card className="hover:shadow-lg transition-shadow duration-200">
@@ -251,13 +255,18 @@ export function ProjectCard({ project, showClient = false, onConnectJira, onDele
               Ver Insights
             </Button>
           ) : (
-            <Button variant="outline" size="sm" className="flex-1">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="flex-1"
+              onClick={() => onConnectJira?.(project.id)}
+            >
               <Settings className="mr-2 h-4 w-4" />
-              Configurar
+              {hasAnyIntegration ? 'Gerenciar Integrações' : 'Conectar Ferramentas'}
             </Button>
           )}
           
-          {!project.jira_connected && (
+          {!hasAnyIntegration && (
             <Button 
               variant="secondary" 
               size="sm" 

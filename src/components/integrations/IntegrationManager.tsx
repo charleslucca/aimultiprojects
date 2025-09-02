@@ -86,25 +86,51 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
   };
 
   const handleAddIntegration = async () => {
-    if (!selectedType || !config.url) {
+    if (!selectedType) {
       toast({
         title: 'Campos obrigatórios',
-        description: 'Preencha todos os campos obrigatórios',
+        description: 'Selecione o tipo de integração',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate required fields based on integration type
+    if (selectedType === 'jira' && (!config.url || !config.username || !config.token)) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha URL, usuário e token para integração Jira',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (selectedType === 'azure_boards' && (!config.organization || !config.token)) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha organização e token para integração Azure Boards',
         variant: 'destructive',
       });
       return;
     }
 
     try {
+      // Test connection first for supported integrations
+      if (selectedType === 'azure_boards') {
+        await testAzureConnection(config);
+      }
+
       const { error } = await supabase
         .from('project_integrations')
         .insert({
           project_id: projectId,
           client_id: clientId,
           integration_type: selectedType,
+          integration_subtype: selectedType === 'azure_boards' ? 'devops' : null,
           configuration: config,
           is_active: true,
-          sync_enabled: true
+          sync_enabled: true,
+          metadata: { created_via: 'integration_manager' }
         });
 
       if (error) throw error;
@@ -118,23 +144,67 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
       setSelectedType('');
       setConfig({});
       loadIntegrations();
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: 'Erro ao adicionar integração',
-        description: 'Não foi possível adicionar a integração',
+        description: error.message,
         variant: 'destructive',
       });
     }
   };
 
+  const testAzureConnection = async (config: any) => {
+    const { data, error } = await supabase.functions.invoke('azure-boards-sync', {
+      body: { 
+        action: 'test_connection', 
+        config: {
+          organization: config.organization,
+          personalAccessToken: config.token
+        }
+      }
+    });
+    
+    if (error) {
+      throw new Error(`Erro ao testar conexão: ${error.message}`);
+    }
+    
+    if (!data?.success) {
+      throw new Error('Falha na conexão com Azure DevOps');
+    }
+  };
+
   const toggleSync = async (integrationId: string, enabled: boolean) => {
     try {
+      const integration = integrations.find(i => i.id === integrationId);
+      if (!integration) return;
+
       const { error } = await supabase
         .from('project_integrations')
         .update({ sync_enabled: enabled })
         .eq('id', integrationId);
 
       if (error) throw error;
+
+      // Trigger sync if enabling
+      if (enabled) {
+        if (integration.integration_type === 'azure_boards') {
+          try {
+            await supabase.functions.invoke('azure-boards-sync', {
+              body: { 
+                action: 'sync_integration', 
+                integration_id: integrationId,
+                config: {
+                  organization: integration.configuration.organization,
+                  project: integration.configuration.project,
+                  personalAccessToken: integration.configuration.token
+                }
+              }
+            });
+          } catch (syncError) {
+            console.error('Azure sync failed:', syncError);
+          }
+        }
+      }
 
       toast({
         title: enabled ? 'Sincronização ativada' : 'Sincronização pausada',
@@ -172,6 +242,39 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
       toast({
         title: 'Erro ao remover integração',
         description: 'Não foi possível remover a integração',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleSyncIntegration = async (integration: Integration) => {
+    try {
+      if (integration.integration_type === 'azure_boards') {
+        const { data, error } = await supabase.functions.invoke('azure-boards-sync', {
+          body: { 
+            action: 'sync_integration', 
+            integration_id: integration.id,
+            config: {
+              organization: integration.configuration.organization,
+              project: integration.configuration.project,
+              personalAccessToken: integration.configuration.token
+            }
+          }
+        });
+        
+        if (error) throw error;
+        
+        toast({
+          title: 'Sincronização iniciada',
+          description: 'Os dados do Azure Boards estão sendo sincronizados',
+        });
+      }
+      
+      loadIntegrations();
+    } catch (error: any) {
+      toast({
+        title: 'Erro na sincronização',
+        description: error.message,
         variant: 'destructive',
       });
     }
@@ -235,6 +338,9 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
                 onChange={(e) => setConfig({ ...config, organization: e.target.value })}
                 placeholder="nome-da-organizacao"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Apenas o nome da organização (sem https://dev.azure.com/)
+              </p>
             </div>
             <div>
               <Label htmlFor="azure-project">Projeto</Label>
@@ -246,7 +352,7 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
               />
             </div>
             <div>
-              <Label htmlFor="azure-token">Personal Access Token</Label>
+              <Label htmlFor="azure-token">Personal Access Token *</Label>
               <Input
                 id="azure-token"
                 type="password"
@@ -254,6 +360,9 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
                 onChange={(e) => setConfig({ ...config, token: e.target.value })}
                 placeholder="Seu PAT do Azure DevOps"
               />
+              <p className="text-xs text-muted-foreground mt-1">
+                Token com permissões de leitura em Work Items e Projects
+              </p>
             </div>
           </>
         );
@@ -431,7 +540,12 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
                   )}
 
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="flex-1">
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="flex-1"
+                      onClick={() => handleSyncIntegration(integration)}
+                    >
                       <RefreshCw className="h-3 w-3 mr-1" />
                       Sincronizar
                     </Button>
