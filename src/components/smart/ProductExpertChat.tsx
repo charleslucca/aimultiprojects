@@ -42,6 +42,8 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
   const [attachments, setAttachments] = useState<any[]>([]);
   const [showUpload, setShowUpload] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [lastSendTime, setLastSendTime] = useState(0);
+  const [requestController, setRequestController] = useState<AbortController | null>(null);
 
   // Auto-scroll to bottom with proper timing
   const scrollToBottom = (smooth = true) => {
@@ -155,8 +157,29 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
   const handleSendMessage = async () => {
     if ((!inputMessage.trim() && attachments.length === 0) || isProcessing) return;
 
+    // Debounce: prevent rapid successive requests (2 second minimum between requests)
+    const now = Date.now();
+    if (now - lastSendTime < 2000) {
+      toast({
+        title: "Aguarde um momento",
+        description: "Aguarde alguns segundos entre mensagens.",
+        variant: "default"
+      });
+      return;
+    }
+
+    // Abort any existing request
+    if (requestController) {
+      requestController.abort();
+    }
+
+    // Create new abort controller for this request
+    const controller = new AbortController();
+    setRequestController(controller);
+
     try {
       setIsProcessing(true);
+      setLastSendTime(now);
 
       // Create chat if doesn't exist
       let chatIdToUse = currentChatId;
@@ -193,14 +216,20 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
       setMessages(prev => [...prev, userMessage]);
       setInputMessage("");
 
-      // Call AI expert with complete attachment data
-      const { data, error } = await supabase.functions.invoke('product-expert-chat', {
+      // Call AI expert with complete attachment data and timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Frontend timeout after 30 seconds')), 30000);
+      });
+
+      const apiPromise = supabase.functions.invoke('product-expert-chat', {
         body: {
           chatId: chatIdToUse,
           message: inputMessage,
           attachments: allAttachments
         }
       });
+
+      const { data, error } = await Promise.race([apiPromise, timeoutPromise]) as any;
 
       if (error) throw error;
 
@@ -224,21 +253,26 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
       });
 
     } catch (error: any) {
+      // Check if request was aborted
+      if (controller.signal.aborted) {
+        console.log('Request was aborted');
+        return;
+      }
       console.error('Error sending message:', error);
       
       // Determine user-friendly error message based on error type
       let errorMessage = 'Ocorreu um erro inesperado. Tente novamente.';
       
-      if (error.message?.includes('timeout') || error.message?.includes('408')) {
-        errorMessage = 'O processamento está demorando mais que o esperado. Tente com arquivos menores ou aguarde alguns minutos.';
-      } else if (error.message?.includes('503') || error.message?.includes('Service')) {
-        errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns instantes.';
+      if (error.message?.includes('timeout') || error.message?.includes('408') || error.message?.includes('Frontend timeout')) {
+        errorMessage = 'Processamento demorou mais que o esperado (30s). Tente com arquivos menores ou aguarde alguns minutos.';
+      } else if (error.message?.includes('503') || error.message?.includes('Service') || error.message?.includes('circuit_breaker')) {
+        errorMessage = 'Serviço em recuperação após sobrecarga. Aguarde 3-5 minutos antes de tentar novamente.';
       } else if (error.message?.includes('Network') || error.message?.includes('fetch')) {
         errorMessage = 'Problema de conexão. Verifique sua internet e tente novamente.';
       } else if (error.message?.includes('500')) {
-        errorMessage = 'Erro interno do servidor. Os desenvolvedores foram notificados.';
+        errorMessage = 'Erro interno do servidor. Aguarde alguns minutos e tente novamente.';
       } else if (error.message?.includes('temporary_overload')) {
-        errorMessage = 'Serviço temporariamente sobrecarregado. Aguarde alguns instantes.';
+        errorMessage = 'Serviço temporariamente sobrecarregado. Aguarde 3 minutos antes de tentar novamente.';
       }
 
       // Add error message to chat
@@ -264,6 +298,7 @@ Seus arquivos foram salvos automaticamente.`,
       });
     } finally {
       setIsProcessing(false);
+      setRequestController(null);
     }
   };
 
@@ -472,7 +507,7 @@ Seus arquivos foram salvos automaticamente.`,
             
             <Button
               onClick={handleSendMessage}
-              disabled={(!inputMessage.trim() && attachments.length === 0) || isProcessing}
+              disabled={(!inputMessage.trim() && attachments.length === 0) || isProcessing || (Date.now() - lastSendTime < 2000)}
               className="flex-shrink-0 h-auto"
             >
               {isProcessing ? (

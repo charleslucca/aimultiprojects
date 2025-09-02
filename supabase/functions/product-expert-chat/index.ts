@@ -47,18 +47,59 @@ INSTRUÇÕES ESPECIAIS:
 
 Agora aguarde o usuário anexar documentos ou fazer perguntas sobre seu projeto.`;
 
+// Simple circuit breaker to prevent infinite loops
+const circuitBreaker = {
+  failures: 0,
+  lastFailure: 0,
+  isOpen: function() {
+    const now = Date.now();
+    // Circuit opens after 3 failures within 2 minutes
+    if (this.failures >= 3 && (now - this.lastFailure) < 120000) {
+      return true;
+    }
+    // Reset after 5 minutes
+    if ((now - this.lastFailure) > 300000) {
+      this.failures = 0;
+    }
+    return false;
+  },
+  recordFailure: function() {
+    this.failures++;
+    this.lastFailure = Date.now();
+  },
+  recordSuccess: function() {
+    this.failures = 0;
+  }
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Global timeout for the entire edge function (25 seconds)
+  // Check circuit breaker first
+  if (circuitBreaker.isOpen()) {
+    console.log('Circuit breaker is open - refusing request');
+    return new Response(
+      JSON.stringify({
+        error: 'circuit_breaker_open',
+        user_message: 'Serviço em recuperação após sobrecarga. Aguarde alguns minutos.',
+        retry_after: 300
+      }),
+      {
+        status: 503,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '300' },
+      }
+    );
+  }
+
+  // Global timeout for the entire edge function (20 seconds)
   const globalController = new AbortController();
   const globalTimeout = setTimeout(() => {
-    console.log('Global timeout reached (25s), aborting entire function');
+    console.log('Global timeout reached (20s), aborting entire function');
     globalController.abort();
-  }, 25000);
+  }, 20000);
 
   try {
     // Validate environment variables first
@@ -192,8 +233,8 @@ serve(async (req) => {
     console.log(`Sending request to OpenAI with ${messages.length} messages`);
     const requestStartTime = Date.now();
 
-    // Optimized OpenAI API call with shorter timeouts
-    const makeOpenAICall = async (model: string, timeoutMs: number = 5000) => {
+    // Optimized OpenAI API call with better timeout management
+    const makeOpenAICall = async (model: string, timeoutMs: number = 8000) => {
       console.log(`Trying ${model} with ${timeoutMs}ms timeout...`);
       
       const controller = new AbortController();
@@ -213,11 +254,11 @@ serve(async (req) => {
         // Handle different model parameter requirements
         if (model.includes('gpt-4o')) {
           // Legacy models use max_tokens and support temperature
-          requestBody.max_tokens = 800; // Reduced for faster response
-          requestBody.temperature = 0.7;
+          requestBody.max_tokens = 600; // Reduced for faster response
+          requestBody.temperature = 0.5; // Lower temperature for consistency
         } else {
           // Newer models (GPT-5, GPT-4.1) use max_completion_tokens, no temperature
-          requestBody.max_completion_tokens = 800; // Reduced for faster response
+          requestBody.max_completion_tokens = 600; // Reduced for faster response
         }
 
         console.log(`Making request to ${model}...`);
@@ -251,46 +292,44 @@ serve(async (req) => {
       }
     };
 
-    // Fast fallback strategy with shorter timeouts
+    // Fast fallback strategy with optimized timeouts
     let data;
     let modelUsed = 'gpt-4o-mini';
     
     try {
-      // Start with fastest and most reliable model - short timeout
+      // Start with fastest and most reliable model
       console.log('Starting with GPT-4o-mini (fastest)...');
-      data = await makeOpenAICall('gpt-4o-mini', 5000); // 5 seconds only
+      data = await makeOpenAICall('gpt-4o-mini', 8000); // 8 seconds
       modelUsed = 'gpt-4o-mini';
+      circuitBreaker.recordSuccess();
     } catch (error) {
       console.log(`GPT-4o-mini failed: ${error.message}`);
       try {
-        // Try GPT-4.1 with slightly longer timeout
-        console.log('Trying GPT-4.1...');
-        data = await makeOpenAICall('gpt-4.1-2025-04-14', 7000); // 7 seconds
+        // Try GPT-4.1 as fallback only
+        console.log('Trying GPT-4.1 as fallback...');
+        data = await makeOpenAICall('gpt-4.1-2025-04-14', 10000); // 10 seconds
         modelUsed = 'gpt-4.1-2025-04-14';
+        circuitBreaker.recordSuccess();
       } catch (error2) {
-        console.log(`GPT-4.1 failed: ${error2.message}`);
-        try {
-          // Last resort: GPT-5 with maximum timeout allowed
-          console.log('Last attempt with GPT-5...');
-          data = await makeOpenAICall('gpt-5-2025-08-07', 8000); // 8 seconds max
-          modelUsed = 'gpt-5-2025-08-07';
-        } catch (error3) {
-          console.error(`All models failed - GPT-4o: ${error.message}, GPT-4.1: ${error2.message}, GPT-5: ${error3.message}`);
-          
-          // Fallback response instead of complete failure
-          clearTimeout(globalTimeout);
-          return new Response(
-            JSON.stringify({
-              response: "Desculpe, o serviço de IA está temporariamente sobrecarregado. Por favor, tente novamente em alguns instantes. Se o problema persistir, os arquivos foram salvos e você pode tentar novamente mais tarde.",
-              artifacts: null,
-              model_used: 'fallback',
-              error: 'temporary_overload'
-            }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            }
-          );
-        }
+        console.error(`Both models failed - GPT-4o: ${error.message}, GPT-4.1: ${error2.message}`);
+        
+        // Record failure for circuit breaker
+        circuitBreaker.recordFailure();
+        
+        // Return fast fallback response
+        clearTimeout(globalTimeout);
+        return new Response(
+          JSON.stringify({
+            response: "⚠️ O serviço de IA está temporariamente sobrecarregado.\n\n**Seus arquivos foram salvos automaticamente.** Aguarde 2-3 minutos e tente novamente.\n\nSe o problema persistir, recarregue a página.",
+            artifacts: null,
+            model_used: 'fallback',
+            error: 'temporary_overload',
+            retry_after: 180
+          }),
+          {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '180' },
+          }
+        );
       }
     }
 
