@@ -134,151 +134,205 @@ serve(async (req) => {
 
 // Generate all GitHub insights for a project with delay between calls
 async function generateAllGitHubInsights(supabaseClient: any, openAIApiKey: string, integrationId: string, projectId: string) {
-  console.log('Starting GitHub insights generation for:', { integrationId, projectId });
+  console.log('🚀 Starting GitHub insights generation for:', { integrationId, projectId });
   
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
   
-  try {
-    // Generate insights with delays to avoid timeouts
-    await performSecurityAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
-    await delay(1000);
-    
-    await performCodeQualityAssessment(supabaseClient, openAIApiKey, integrationId, projectId);
-    await delay(1000);
-    
-    await performTestCoverageAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
-    await delay(1000);
-    
-    await performPerformanceAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
-    await delay(1000);
-    
-    await performPipelineHealthAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
-    await delay(1000);
-    
-    await performDevPerformanceAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
-    await delay(1000);
-    
-    await performReleasePredictionAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
-    
-    console.log('GitHub insights generation completed successfully');
-    return { success: true };
-  } catch (error) {
-    console.error('Error in generateAllGitHubInsights:', error);
-    throw error;
+  const insights = [
+    { name: 'Security Analysis', func: performSecurityAnalysis },
+    { name: 'Code Quality Assessment', func: performCodeQualityAssessment },
+    { name: 'Test Coverage Analysis', func: performTestCoverageAnalysis },
+    { name: 'Performance Analysis', func: performPerformanceAnalysis },
+    { name: 'Pipeline Health Analysis', func: performPipelineHealthAnalysis },
+    { name: 'Development Performance Analysis', func: performDevPerformanceAnalysis },
+    { name: 'Release Prediction Analysis', func: performReleasePredictionAnalysis }
+  ];
+  
+  let successCount = 0;
+  let errorCount = 0;
+  
+  for (const insight of insights) {
+    try {
+      console.log(`📊 Starting ${insight.name}...`);
+      const startTime = Date.now();
+      
+      await insight.func(supabaseClient, openAIApiKey, integrationId, projectId);
+      
+      const duration = Date.now() - startTime;
+      console.log(`✅ ${insight.name} completed in ${duration}ms`);
+      successCount++;
+      
+      await delay(1000);
+    } catch (error) {
+      console.error(`❌ Error in ${insight.name}:`, error);
+      errorCount++;
+      // Continue with other insights even if one fails
+    }
   }
+  
+  console.log(`🎯 GitHub insights generation completed. Success: ${successCount}, Errors: ${errorCount}`);
+  
+  if (successCount === 0) {
+    throw new Error(`All GitHub insights failed to generate. Check logs for details.`);
+  }
+  
+  return { success: true, generated: successCount, failed: errorCount };
 }
 
 // Security Analysis
 async function performSecurityAnalysis(supabaseClient: any, openAIApiKey: string, integrationId: string, projectId: string) {
-  console.log('Starting security analysis...');
-
-  // Get repositories for this integration
-  const { data: repositories } = await supabaseClient
-    .from('github_repositories')
-    .select('*')
-    .eq('integration_id', integrationId);
-
-  if (!repositories || repositories.length === 0) {
-    console.log('No repositories found for security analysis');
-    return;
-  }
-
-  // Get recent commits to analyze
-  const { data: commits } = await supabaseClient
-    .from('github_commits')
-    .select('*')
-    .eq('integration_id', integrationId)
-    .order('commit_date', { ascending: false })
-    .limit(50);
-
-  // Get pull requests for review analysis
-  const { data: pullRequests } = await supabaseClient
-    .from('github_pull_requests')
-    .select('*')
-    .eq('integration_id', integrationId)
-    .order('created_at', { ascending: false })
-    .limit(30);
-
-  const analysisData = {
-    repositories: repositories.map(r => ({
-      name: r.name,
-      language: r.language,
-      size_kb: r.size_kb,
-      open_issues: r.open_issues_count
-    })),
-    recent_commits: commits?.map(c => ({
-      message: c.message,
-      author: c.author_name,
-      files_changed: c.changed_files,
-      additions: c.additions,
-      deletions: c.deletions
-    })) || [],
-    pull_requests: pullRequests?.map(pr => ({
-      title: pr.title,
-      state: pr.state,
-      mergeable: pr.mergeable,
-      base_branch: pr.base_branch,
-      head_branch: pr.head_branch
-    })) || []
-  };
-
-  const prompt = `
-    Analise os dados do repositório GitHub para identificar riscos de segurança:
-
-    Repositórios: ${JSON.stringify(analysisData.repositories)}
-    Commits Recentes: ${JSON.stringify(analysisData.recent_commits.slice(0, 10))}
-    Pull Requests: ${JSON.stringify(analysisData.pull_requests.slice(0, 10))}
-
-    Identifique:
-    1. VULNERABILIDADES CRÍTICAS: Credenciais expostas, secrets em código, dependências desatualizadas
-    2. RISCOS DE CÓDIGO: Padrões perigosos, código não revisado, alterações sensíveis
-    3. PROCESSO: Falta de revisão de código, merges diretos na main, branches desprotegidas
-    4. ALERTAS DE DEPENDÊNCIAS: Bibliotecas com vulnerabilidades conhecidas
-
-    Responda em JSON válido com:
-    {
-      "security_score": 0.0-1.0,
-      "critical_alerts": [
-        {
-          "type": "credential_exposure|vulnerable_dependency|unsafe_code|process_violation",
-          "severity": "CRITICAL|HIGH|MEDIUM|LOW",
-          "title": "Título do alerta",
-          "description": "Descrição detalhada",
-          "affected_files": ["arquivo1.js", "arquivo2.py"],
-          "recommendations": ["ação1", "ação2"]
-        }
-      ],
-      "vulnerabilities_found": number,
-      "recommendations": ["recomendação1", "recomendação2"]
-    }
-  `;
-
+  console.log('🔒 Starting security analysis...');
+  
   try {
+    // Fetch repositories
+    console.log('📦 Fetching repositories for integration:', integrationId);
+    const { data: repositories, error: repoError } = await supabaseClient
+      .from('github_repositories')
+      .select('*')
+      .eq('integration_id', integrationId);
+
+    if (repoError) {
+      console.error('❌ Error fetching repositories:', repoError);
+      throw repoError;
+    }
+    console.log(`📦 Found ${repositories?.length || 0} repositories`);
+
+    // Fetch recent commits (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    console.log('💾 Fetching recent commits...');
+    const { data: commits, error: commitsError } = await supabaseClient
+      .from('github_commits')
+      .select('*')
+      .eq('integration_id', integrationId)
+      .gte('commit_date', thirtyDaysAgo.toISOString())
+      .order('commit_date', { ascending: false })
+      .limit(100);
+
+    if (commitsError) {
+      console.error('❌ Error fetching commits:', commitsError);
+      throw commitsError;
+    }
+    console.log(`💾 Found ${commits?.length || 0} recent commits`);
+
+    // Fetch pull requests
+    console.log('🔀 Fetching pull requests...');
+    const { data: pullRequests, error: prError } = await supabaseClient
+      .from('github_pull_requests')
+      .select('*')
+      .eq('integration_id', integrationId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (prError) {
+      console.error('❌ Error fetching pull requests:', prError);
+      throw prError;
+    }
+    console.log(`🔀 Found ${pullRequests?.length || 0} pull requests`);
+
+    // Check if we have enough data
+    if (!repositories?.length && !commits?.length && !pullRequests?.length) {
+      console.log('⚠️ No data available for security analysis');
+      throw new Error('No GitHub data available for security analysis');
+    }
+
+    const analysisData = {
+      repositories: repositories?.map(r => ({
+        name: r.name,
+        language: r.language,
+        size_kb: r.size_kb,
+        open_issues: r.open_issues_count
+      })) || [],
+      recent_commits: commits?.map(c => ({
+        message: c.message,
+        author: c.author_name,
+        files_changed: c.changed_files,
+        additions: c.additions,
+        deletions: c.deletions
+      })) || [],
+      pull_requests: pullRequests?.map(pr => ({
+        title: pr.title,
+        state: pr.state,
+        mergeable: pr.mergeable,
+        base_branch: pr.base_branch,
+        head_branch: pr.head_branch
+      })) || []
+    };
+
+    const prompt = `
+      Analise os dados do repositório GitHub para identificar riscos de segurança:
+
+      Repositórios: ${JSON.stringify(analysisData.repositories)}
+      Commits Recentes: ${JSON.stringify(analysisData.recent_commits.slice(0, 10))}
+      Pull Requests: ${JSON.stringify(analysisData.pull_requests.slice(0, 10))}
+
+      Identifique:
+      1. VULNERABILIDADES CRÍTICAS: Credenciais expostas, secrets em código, dependências desatualizadas
+      2. RISCOS DE CÓDIGO: Padrões perigosos, código não revisado, alterações sensíveis
+      3. PROCESSO: Falta de revisão de código, merges diretos na main, branches desprotegidas
+      4. ALERTAS DE DEPENDÊNCIAS: Bibliotecas com vulnerabilidades conhecidas
+
+      Responda em JSON válido com:
+      {
+        "security_score": 0.0-1.0,
+        "critical_alerts": [
+          {
+            "type": "credential_exposure|vulnerable_dependency|unsafe_code|process_violation",
+            "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+            "title": "Título do alerta",
+            "description": "Descrição detalhada",
+            "affected_files": ["arquivo1.js", "arquivo2.py"],
+            "recommendations": ["ação1", "ação2"]
+          }
+        ],
+        "vulnerabilities_found": number,
+        "recommendations": ["recomendação1", "recomendação2"]
+      }
+    `;
+
+    console.log('🤖 Calling OpenAI for security analysis...');
     const analysis = await callOpenAI(openAIApiKey, prompt, 'Você é um especialista em segurança de código.');
+    console.log('🤖 OpenAI analysis received:', { hasData: !!analysis, keys: Object.keys(analysis || {}) });
 
-    // Store insight in database
-    await supabaseClient
+    const executiveSummary = generateSecuritySummary(analysis);
+    console.log('📋 Generated executive summary:', executiveSummary?.substring(0, 100) + '...');
+
+    // Store the insight in the database
+    console.log('💾 Storing security analysis in database...');
+    const insertData = {
+      project_id: projectId,
+      insight_type: 'github_security',
+      confidence_score: analysis.security_score || 0.8,
+      insight_data: {
+        ...analysis,
+        analysis_type: 'security',
+        repositories_analyzed: repositories.length,
+        commits_analyzed: commits?.length || 0,
+        prs_analyzed: pullRequests?.length || 0
+      },
+      executive_summary: executiveSummary,
+      alert_category: analysis.critical_alerts?.length > 0 ? 'SECURITY' : 'GENERAL',
+      expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    };
+    console.log('💾 Insert data prepared:', { ...insertData, insight_data: 'REDACTED', executive_summary: 'REDACTED' });
+
+    const { data: insertResult, error } = await supabaseClient
       .from('jira_ai_insights')
-      .insert({
-        project_id: projectId,
-        insight_type: 'github_security',
-        confidence_score: analysis.security_score || 0.8,
-        insight_data: {
-          ...analysis,
-          analysis_type: 'security',
-          repositories_analyzed: repositories.length,
-          commits_analyzed: commits?.length || 0,
-          prs_analyzed: pullRequests?.length || 0
-        },
-        executive_summary: generateSecuritySummary(analysis),
-        alert_category: analysis.critical_alerts?.length > 0 ? 'SECURITY' : 'GENERAL',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      });
+      .insert(insertData)
+      .select();
 
-    console.log('Security analysis completed');
+    if (error) {
+      console.error('❌ Error storing security analysis:', error);
+      throw error;
+    }
+
+    console.log('✅ Security analysis stored successfully:', { insertId: insertResult?.[0]?.id });
+    console.log('🔒 Security analysis completed');
+    
     return analysis;
   } catch (error) {
-    console.error('Error in security analysis:', error);
+    console.error('❌ Security analysis failed:', error);
     throw error;
   }
 }
@@ -913,10 +967,25 @@ async function performReleasePredictionAnalysis(supabaseClient: any, openAIApiKe
 
 // Helper function to call OpenAI API
 async function callOpenAI(apiKey: string, prompt: string, systemMessage: string = 'You are a helpful assistant.'): Promise<any> {
+  console.log('🤖 Starting OpenAI API call...');
+  const timeout = 25000; // 25 seconds timeout
+  
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
+    console.log('🤖 Making API request to OpenAI...');
+    const requestData = {
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemMessage + ' Responda APENAS com JSON válido.' },
+        { role: 'user', content: prompt.substring(0, 500) + '...' } // Log truncated prompt
+      ],
+      max_tokens: 2000,
+      temperature: 0.3,
+    };
+    console.log('🤖 Request data prepared:', { ...requestData, messages: 'REDACTED' });
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -935,23 +1004,65 @@ async function callOpenAI(apiKey: string, prompt: string, systemMessage: string 
       signal: controller.signal,
     });
 
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
+    console.log('🤖 OpenAI API response status:', response.status);
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ OpenAI API error details:', errorText);
       throw new Error(`OpenAI API error: ${response.status} ${response.statusText}`);
     }
 
     const aiResponse = await response.json();
-    let content = aiResponse.choices[0].message.content;
+    console.log('🤖 OpenAI response received:', { 
+      hasChoices: !!aiResponse.choices, 
+      choicesLength: aiResponse.choices?.length,
+      hasContent: !!aiResponse.choices?.[0]?.message?.content 
+    });
+    
+    let content = aiResponse.choices[0]?.message?.content;
+    
+    if (!content) {
+      console.error('❌ No content in OpenAI response:', aiResponse);
+      throw new Error('No content in OpenAI response');
+    }
+
+    console.log('🤖 Raw content preview:', content.substring(0, 200) + '...');
     
     // Clean JSON content
     if (content.includes('```json')) {
       content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
     }
+    console.log('🤖 Cleaned content preview:', content.substring(0, 200) + '...');
     
-    return JSON.parse(content);
+    try {
+      const parsed = JSON.parse(content);
+      console.log('✅ Successfully parsed JSON:', { keys: Object.keys(parsed) });
+      return parsed;
+    } catch (parseError) {
+      console.error('❌ JSON parse error:', parseError);
+      console.error('❌ Raw content that failed to parse:', content);
+      
+      // Try to extract JSON from the content
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const extractedJson = JSON.parse(jsonMatch[0]);
+          console.log('✅ Successfully extracted and parsed JSON from content');
+          return extractedJson;
+        } catch (extractError) {
+          console.error('❌ Failed to parse extracted JSON:', extractError);
+        }
+      }
+      
+      throw new Error(`Failed to parse OpenAI response as JSON: ${parseError}`);
+    }
   } catch (error) {
-    clearTimeout(timeout);
+    clearTimeout(timeoutId);
+    console.error('❌ OpenAI API call failed:', error);
+    if (error.name === 'AbortError') {
+      throw new Error('OpenAI request timed out');
+    }
     throw error;
   }
 }
