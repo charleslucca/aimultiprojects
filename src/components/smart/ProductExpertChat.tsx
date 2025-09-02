@@ -336,10 +336,10 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
         </ScrollArea>
 
         {/* File Upload Area */}
-        {showUpload && (
+        {showUpload && currentChatId && (
           <div className="border-t pt-4 mb-4">
             <SmartFileUpload
-              sessionId={currentChatId || 'temp'}
+              sessionId={currentChatId}
               sessionType="chat"
               stageName="hub"
               onUploadComplete={(files) => {
@@ -372,7 +372,22 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowUpload(!showUpload)}
+              onClick={async () => {
+                if (!showUpload && !currentChatId) {
+                  // Create chat automatically when user wants to upload
+                  try {
+                    await createNewChat();
+                  } catch (error) {
+                    toast({
+                      title: "Erro",
+                      description: "Não foi possível preparar o upload. Tente novamente.",
+                      variant: "destructive"
+                    });
+                    return;
+                  }
+                }
+                setShowUpload(!showUpload);
+              }}
               className="flex-shrink-0"
             >
               <Paperclip className="h-4 w-4" />

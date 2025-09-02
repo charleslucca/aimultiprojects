@@ -67,6 +67,11 @@ export function SmartFileUpload({
 
   const uploadFile = async (file: File): Promise<UploadedFile | null> => {
     if (!user) return null;
+    
+    // Validate sessionId is a proper UUID
+    if (!sessionId || sessionId === 'temp' || sessionId.length !== 36) {
+      throw new Error('ID de sessão inválido. Crie uma conversa primeiro.');
+    }
 
     const fileId = crypto.randomUUID();
     const sanitizedName = file.name
