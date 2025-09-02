@@ -16,8 +16,10 @@ import {
   Download,
   Sparkles,
   Loader2,
-  Paperclip
+  Paperclip,
+  Settings
 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -41,6 +43,7 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
   const [currentChatId, setCurrentChatId] = useState(chatId);
   const [attachments, setAttachments] = useState<any[]>([]);
   const [showUpload, setShowUpload] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [lastSendTime, setLastSendTime] = useState(0);
   const [requestController, setRequestController] = useState<AbortController | null>(null);
@@ -250,7 +253,8 @@ export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatPr
         body: {
           chatId: chatIdToUse,
           message: inputMessage,
-          attachments: allAttachments
+          attachments: allAttachments,
+          model: selectedModel
         }
       });
 
@@ -525,6 +529,24 @@ ${suggestions.map(s => `- ${s}`).join('\n')}
 
         {/* Input Area */}
         <div className="flex-shrink-0 space-y-2">
+          {/* Model Selection */}
+          <div className="flex items-center gap-2 px-2">
+            <Settings className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Modelo:</span>
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger className="w-[200px] h-8">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gpt-4o-mini">GPT-4o Mini (Rápido)</SelectItem>
+                <SelectItem value="gpt-4o">GPT-4o (Balanceado)</SelectItem>
+                <SelectItem value="gpt-4.1-2025-04-14">GPT-4.1 (Avançado)</SelectItem>
+                <SelectItem value="gpt-5-mini-2025-08-07">GPT-5 Mini (Novo)</SelectItem>
+                <SelectItem value="gpt-5-2025-08-07">GPT-5 (Premium)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {attachments.map((att, i) => (

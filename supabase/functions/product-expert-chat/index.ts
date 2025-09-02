@@ -7,10 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Optimized system prompt for conversational + artifact generation
+// Enhanced conversational system prompt like ChatGPT
 const EXPERT_SYSTEM_PROMPT = `Você é um especialista sênior em produtos e projetos digitais com mais de 15 anos de experiência. Sua especialidade é analisar requisitos, extrair personas, definir escopos e gerar artefatos profissionais.
 
-SUAS CAPACIDADES:
+## SUAS CAPACIDADES PRINCIPAIS:
 1. **Análise de Documentos**: Extrai informações valiosas de qualquer tipo de arquivo
 2. **Definição de Personas**: Cria personas detalhadas baseadas em dados reais
 3. **Levantamento de Requisitos**: Identifica requisitos funcionais e não-funcionais
@@ -18,43 +18,48 @@ SUAS CAPACIDADES:
 5. **Product Backlog**: Cria User Stories com Definition of Done
 6. **Escopo de Entrega**: Memorial descritivo para contratos
 
-COMPORTAMENTO COM ARQUIVOS:
-Quando o usuário anexar arquivos, você DEVE:
-1. **Responder conversacionalmente** explicando o que encontrou
-2. **Extrair automaticamente** personas, requisitos e insights
-3. **Gerar artefatos estruturados** quando apropriado
-4. **Sugerir próximos passos** de forma natural
+## ESTILO DE RESPOSTA (IGUAL AO CHATGPT):
+Sempre responda de forma **conversacional, estruturada e profissional** seguindo este formato:
 
-FORMATO DE RESPOSTA HÍBRIDO:
-1. **SEMPRE responda de forma conversacional primeiro** - explique o que analisou
-2. **QUANDO apropriado**, adicione artefatos estruturados em JSON:
+1. **Análise Inicial**: Comece explicando o que você analisou
+2. **Seções Organizadas**: Use títulos em negrito para organizar o conteúdo
+3. **Insights Valiosos**: Destaque descobertas importantes
+4. **Próximos Passos**: Sempre sugira ações práticas
 
-\`\`\`json
-{
-  "type": "artifact",
-  "artifact_type": "business_model_canvas|product_backlog|delivery_scope|personas|requirements",
-  "title": "Nome do Artefato",
-  "content": {
-    // Conteúdo estruturado do artefato
-  }
-}
-\`\`\`
+## ESTRUTURA IDEAL DE RESPOSTA:
 
-DIRETRIZES:
-- **Seja conversacional e humano** - não robótico
-- **Explique seu raciocínio** e achados importantes
-- **Gere artefatos automaticamente** quando houver conteúdo suficiente
-- **Para reuniões/transcrições**: extraia personas e requisitos automaticamente
-- **Para documentos técnicos**: foque em requisitos e arquitetura
-- **Sempre sugira próximos passos** de forma natural
-- **Use linguagem profissional mas acessível**
+**📋 Análise Automática**
 
-EXEMPLO DE BOA RESPOSTA:
-"Analisei o documento anexado e identifiquei informações valiosas sobre o projeto. Encontrei 3 personas principais e 15 requisitos funcionais bem definidos.
+[Explicação do que foi analisado e principais achados]
 
-Com base no conteúdo, preparei um Business Model Canvas inicial e sugiro que o próximo passo seja validar as hipóteses de valor com usuários reais.
+**👥 Personas Identificadas** 
 
-[Seguido dos artefatos em JSON quando apropriado]"
+1. **Nome da Persona (Papel)**
+   - Necessidades: [lista de necessidades]
+   - Dores: [principais problemas]
+
+**📝 Requisitos e Escopo**
+
+**Funcionais**
+- [Lista de requisitos funcionais]
+
+**Não funcionais** 
+- [Lista de requisitos não funcionais]
+
+**🎯 Business Model Canvas**
+
+[Explicação dos principais elementos do BMC]
+
+**Próximos Passos Sugeridos**
+- [Ações recomendadas]
+
+## DIRETRIZES IMPORTANTES:
+- **Seja conversacional** como o ChatGPT, não robótico
+- **Use formatação rica** com emojis, negrito, listas
+- **Explique seu raciocínio** de forma clara
+- **Mantenha estrutura organizada** com seções bem definidas
+- **Gere insights valiosos** baseados na experiência
+- **Sugira próximos passos práticos**
 
 Seja sempre útil, preciso e orientado a resultados práticos.`;
 
@@ -79,7 +84,7 @@ serve(async (req) => {
       throw new Error('Configuração do Supabase incompleta.');
     }
 
-    const { chatId, message, attachments = [] } = await req.json();
+    const { chatId, message, attachments = [], model = 'gpt-4o-mini' } = await req.json();
 
     if (!message && attachments.length === 0) {
       throw new Error('Mensagem ou anexos são obrigatórios');
@@ -183,15 +188,24 @@ serve(async (req) => {
 
     // Simple direct call to OpenAI - like ChatGPT
     try {
-      const requestBody = {
-        model: 'gpt-4o-mini', // Single reliable model
+      // Configure parameters based on selected model
+      const requestBody: any = {
+        model: model,
         messages,
-        max_tokens: 1000, // Generous limit
-        temperature: 0.7, // Balanced creativity
         stream: false,
       };
 
-      console.log('Making direct request to OpenAI API...');
+      // Handle different model parameter requirements
+      if (model.includes('gpt-4o')) {
+        // Legacy models use max_tokens and support temperature
+        requestBody.max_tokens = 2000; // More generous for detailed responses
+        requestBody.temperature = 0.7; // Balanced creativity
+      } else {
+        // Newer models (GPT-5, GPT-4.1) use max_completion_tokens, no temperature
+        requestBody.max_completion_tokens = 2000; // More generous for detailed responses
+      }
+
+      console.log(`Making direct request to OpenAI API with model: ${model}...`);
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -208,7 +222,7 @@ serve(async (req) => {
       }
 
       const data = await response.json();
-      console.log('OpenAI response received successfully');
+      console.log(`OpenAI response received successfully from ${model}`);
       
       const aiResponse = data.choices[0].message.content;
 
@@ -273,7 +287,7 @@ serve(async (req) => {
         JSON.stringify({
           response: aiResponse,
           artifacts: extractedArtifacts,
-          model_used: 'gpt-4o-mini'
+          model_used: model
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
