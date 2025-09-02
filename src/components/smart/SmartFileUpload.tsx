@@ -21,7 +21,7 @@ import {
 
 interface SmartFileUploadProps {
   sessionId: string;
-  sessionType: 'discovery' | 'delivery';
+  sessionType: 'discovery' | 'delivery' | 'chat';
   stageName: string;
   onUploadComplete?: (files: UploadedFile[]) => void;
   accept?: string;
@@ -69,14 +69,12 @@ export function SmartFileUpload({
     if (!user) return null;
 
     const fileId = crypto.randomUUID();
-    // Sanitize filename to avoid invalid characters
     const sanitizedName = file.name
       .replace(/[^a-zA-Z0-9.\-_]/g, '_')
       .replace(/_{2,}/g, '_')
       .toLowerCase();
-    const fileName = `${sessionType}/${sessionId}/${stageName}/${fileId}_${sanitizedName}`;
+    const fileName = `${user.id}/${sessionType}/${sessionId}/${stageName}/${fileId}_${sanitizedName}`;
 
-    // Add to uploading state
     const uploadProgress: UploadProgress = {
       file,
       progress: 0,
@@ -87,9 +85,9 @@ export function SmartFileUpload({
     setUploading(prev => [...prev, uploadProgress]);
 
     try {
-      // Upload to Supabase Storage
+      // Upload to smart-hub-files bucket
       const { error: uploadError } = await supabase.storage
-        .from('project-files')
+        .from('smart-hub-files')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: false
@@ -97,7 +95,6 @@ export function SmartFileUpload({
 
       if (uploadError) throw uploadError;
 
-      // Update progress
       setUploading(prev => prev.map(up => 
         up.id === fileId ? { ...up, progress: 50, status: 'processing' } : up
       ));
@@ -121,7 +118,6 @@ export function SmartFileUpload({
 
       if (dbError) throw dbError;
 
-      // Update progress
       setUploading(prev => prev.map(up => 
         up.id === fileId ? { ...up, progress: 75 } : up
       ));
@@ -135,21 +131,18 @@ export function SmartFileUpload({
       ];
       
       if (file.type.startsWith('audio/') || file.type.startsWith('video/') || 
-          supportedTypes.includes(file.type)) {
+          file.type.startsWith('image/') || supportedTypes.includes(file.type)) {
         
         try {
-          await supabase.functions.invoke('analyze-file', {
+          await supabase.functions.invoke('process-attachments', {
             body: {
               fileId: dbData.id,
               filePath: fileName,
-              fileType: file.type,
-              sessionType,
-              stageName
+              fileType: file.type
             }
           });
         } catch (aiError) {
           console.warn('AI processing failed:', aiError);
-          // Don't fail the upload if AI processing fails
         }
       }
 
@@ -158,7 +151,6 @@ export function SmartFileUpload({
         up.id === fileId ? { ...up, progress: 100, status: 'completed' } : up
       ));
 
-      // Remove from uploading after delay
       setTimeout(() => {
         setUploading(prev => prev.filter(up => up.id !== fileId));
       }, 2000);
@@ -241,7 +233,7 @@ export function SmartFileUpload({
 
       // Remove from storage
       const { error: storageError } = await supabase.storage
-        .from('project-files')
+        .from('smart-hub-files')
         .remove([file.file_path]);
 
       if (storageError) console.warn('Storage removal failed:', storageError);

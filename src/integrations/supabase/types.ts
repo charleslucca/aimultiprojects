@@ -1559,6 +1559,42 @@ export type Database = {
           },
         ]
       }
+      smart_hub_chats: {
+        Row: {
+          attachments: Json
+          chat_name: string
+          created_at: string
+          generated_artifacts: Json
+          id: string
+          messages: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attachments?: Json
+          chat_name?: string
+          created_at?: string
+          generated_artifacts?: Json
+          id?: string
+          messages?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attachments?: Json
+          chat_name?: string
+          created_at?: string
+          generated_artifacts?: Json
+          id?: string
+          messages?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       smart_hub_uploads: {
         Row: {
           ai_analysis: Json | null
