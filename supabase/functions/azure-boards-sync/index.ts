@@ -14,8 +14,11 @@ const supabase = createClient(
 
 interface AzureDevOpsConfig {
   organization: string;
-  project: string;
-  personalAccessToken: string;
+  project?: string;
+  project_name?: string;
+  personal_access_token?: string;
+  personalAccessToken?: string;
+  area_paths?: string[];
   areaPaths?: string;
 }
 
@@ -52,7 +55,17 @@ serve(async (req) => {
 async function testConnection(config: AzureDevOpsConfig) {
   console.log('Testing Azure DevOps connection...');
   
-  const { organization, personalAccessToken } = config;
+  if (!config) {
+    throw new Error('Configuration is required');
+  }
+  
+  const { organization } = config;
+  const personalAccessToken = config.personal_access_token || config.personalAccessToken;
+  
+  if (!organization || !personalAccessToken) {
+    throw new Error('Organization and personal access token are required');
+  }
+  
   const url = `https://dev.azure.com/${organization}/_apis/projects?api-version=7.0`;
   
   const response = await fetch(url, {
@@ -79,12 +92,10 @@ async function testConnection(config: AzureDevOpsConfig) {
   );
 }
 
-async function syncIntegration(integration_id: string, config: AzureDevOpsConfig) {
+async function syncIntegration(integration_id: string, config?: AzureDevOpsConfig) {
   console.log(`Syncing Azure DevOps integration: ${integration_id}`);
   
-  const { organization, project, personalAccessToken } = config;
-  
-  // Get integration details
+  // Get integration details to get configuration if not provided
   const { data: integration, error: integrationError } = await supabase
     .from('project_integrations')
     .select('*')
@@ -95,17 +106,38 @@ async function syncIntegration(integration_id: string, config: AzureDevOpsConfig
     throw new Error(`Failed to get integration: ${integrationError.message}`);
   }
 
+  // Use provided config or get from integration
+  const finalConfig = config || integration.configuration;
+  if (!finalConfig) {
+    throw new Error('No configuration found for integration');
+  }
+
+  const organization = finalConfig.organization;
+  const project = finalConfig.project || finalConfig.project_name;
+  const personalAccessToken = finalConfig.personal_access_token || finalConfig.personalAccessToken;
+  
+  if (!organization || !personalAccessToken) {
+    throw new Error('Organization and personal access token are required');
+  }
+  
+  console.log(`Organization: ${organization}, Project: ${project}`);
+
   // Sync organization data
   await syncOrganization(integration_id, organization, personalAccessToken);
   
-  // Sync project data
-  await syncProject(integration_id, organization, project, personalAccessToken);
+  // Sync project data (only if project is specified)
+  if (project) {
+    await syncProject(integration_id, organization, project, personalAccessToken);
+  }
   
   // Sync work items
-  await syncWorkItems(integration_id, organization, project, personalAccessToken, config.areaPaths);
+  const areaPaths = finalConfig.area_paths || finalConfig.areaPaths;
+  await syncWorkItems(integration_id, organization, project, personalAccessToken, areaPaths);
   
-  // Sync iterations
-  await syncIterations(integration_id, organization, project, personalAccessToken);
+  // Sync iterations (only if project is specified)
+  if (project) {
+    await syncIterations(integration_id, organization, project, personalAccessToken);
+  }
 
   // Update last sync time
   await supabase
@@ -159,7 +191,12 @@ async function syncOrganization(integration_id: string, organization: string, to
 async function syncProject(integration_id: string, organization: string, projectName: string, token: string) {
   console.log(`Syncing project: ${projectName}`);
   
-  const url = `https://dev.azure.com/${organization}/_apis/projects/${projectName}?api-version=7.0`;
+  if (!projectName) {
+    console.log('No project name provided, skipping project sync');
+    return;
+  }
+  
+  const url = `https://dev.azure.com/${organization}/_apis/projects/${encodeURIComponent(projectName)}?api-version=7.0`;
   
   const response = await fetch(url, {
     headers: {
@@ -169,6 +206,8 @@ async function syncProject(integration_id: string, organization: string, project
   });
 
   if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Failed to fetch project: ${response.status} ${response.statusText}`, errorText);
     throw new Error(`Failed to fetch project: ${response.status} ${response.statusText}`);
   }
 
@@ -189,8 +228,8 @@ async function syncProject(integration_id: string, organization: string, project
     }, { onConflict: 'integration_id,azure_id' });
 }
 
-async function syncWorkItems(integration_id: string, organization: string, project: string, token: string, areaPaths?: string) {
-  console.log(`Syncing work items for project: ${project}`);
+async function syncWorkItems(integration_id: string, organization: string, project: string | undefined, token: string, areaPaths?: string[] | string) {
+  console.log(`Syncing work items for project: ${project || 'all projects'}`);
   
   // Get integration details to check for area paths
   const { data: integration } = await supabase
@@ -199,16 +238,24 @@ async function syncWorkItems(integration_id: string, organization: string, proje
     .eq('id', integration_id)
     .single();
 
-  const configAreaPaths = integration?.configuration?.areaPaths || areaPaths;
+  const configAreaPaths = integration?.configuration?.area_paths || integration?.configuration?.areaPaths || areaPaths;
   
   // Get work items using WIQL (Work Item Query Language)
-  const wiqlUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/wiql?api-version=7.0`;
+  const wiqlUrl = project 
+    ? `https://dev.azure.com/${organization}/${encodeURIComponent(project)}/_apis/wit/wiql?api-version=7.0`
+    : `https://dev.azure.com/${organization}/_apis/wit/wiql?api-version=7.0`;
   
   // Build area path filter if specified
   let areaPathFilter = '';
-  if (configAreaPaths && configAreaPaths.trim()) {
-    const paths = configAreaPaths.split(',').map(path => path.trim()).filter(Boolean);
-    if (paths.length > 0) {
+  if (configAreaPaths) {
+    let paths: string[] = [];
+    if (Array.isArray(configAreaPaths)) {
+      paths = configAreaPaths;
+    } else if (typeof configAreaPaths === 'string' && configAreaPaths.trim()) {
+      paths = configAreaPaths.split(',').map(path => path.trim()).filter(Boolean);
+    }
+    
+    if (paths.length > 0 && project) {
       const areaConditions = paths.map(path => `[System.AreaPath] UNDER '${project}\\${path}'`).join(' OR ');
       areaPathFilter = ` AND (${areaConditions})`;
     }
@@ -222,9 +269,9 @@ async function syncWorkItems(integration_id: string, organization: string, proje
              [Microsoft.VSTS.Scheduling.CompletedWork], [System.Priority], [Microsoft.VSTS.Common.Severity],
              [System.Tags], [System.Parent], [System.CreatedDate], [System.ChangedDate], 
              [Microsoft.VSTS.Common.ResolvedDate], [Microsoft.VSTS.Common.ClosedDate]
-      FROM WorkItems 
-      WHERE [System.TeamProject] = '${project}'${areaPathFilter}
-      ORDER BY [System.ChangedDate] DESC
+       FROM WorkItems 
+       WHERE ${project ? `[System.TeamProject] = '${project}'` : '1=1'}${areaPathFilter}
+       ORDER BY [System.ChangedDate] DESC
     `
   };
 
@@ -253,7 +300,9 @@ async function syncWorkItems(integration_id: string, organization: string, proje
   const batchSize = 200;
   for (let i = 0; i < workItemIds.length; i += batchSize) {
     const batch = workItemIds.slice(i, i + batchSize);
-    const detailsUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=all&api-version=7.0`;
+    const detailsUrl = project 
+      ? `https://dev.azure.com/${organization}/${encodeURIComponent(project)}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=all&api-version=7.0`
+      : `https://dev.azure.com/${organization}/_apis/wit/workitems?ids=${batch.join(',')}&$expand=all&api-version=7.0`;
     
     const detailsResponse = await fetch(detailsUrl, {
       headers: {
@@ -306,7 +355,12 @@ async function syncWorkItems(integration_id: string, organization: string, proje
 async function syncIterations(integration_id: string, organization: string, project: string, token: string) {
   console.log(`Syncing iterations for project: ${project}`);
   
-  const url = `https://dev.azure.com/${organization}/${project}/_apis/work/teamsettings/iterations?api-version=7.0`;
+  if (!project) {
+    console.log('No project specified, skipping iterations sync');
+    return;
+  }
+  
+  const url = `https://dev.azure.com/${organization}/${encodeURIComponent(project)}/_apis/work/teamsettings/iterations?api-version=7.0`;
   
   const response = await fetch(url, {
     headers: {

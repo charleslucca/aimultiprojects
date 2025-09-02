@@ -147,6 +147,7 @@ const AzureConfigModal: React.FC<AzureConfigModalProps> = ({
         configuration: {
           organization: formData.organization,
           project_name: formData.project_name,
+          project: formData.project_name, // Add both for compatibility
           personal_access_token: formData.personal_access_token, // In production, this should be encrypted
           area_paths: areaPathsArray,
         },
