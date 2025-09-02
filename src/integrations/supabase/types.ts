@@ -632,6 +632,285 @@ export type Database = {
         }
         Relationships: []
       }
+      github_code_metrics: {
+        Row: {
+          created_at: string
+          id: string
+          integration_id: string
+          measured_at: string | null
+          metric_data: Json | null
+          metric_type: string
+          metric_value: number | null
+          repository_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integration_id: string
+          measured_at?: string | null
+          metric_data?: Json | null
+          metric_type: string
+          metric_value?: number | null
+          repository_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integration_id?: string
+          measured_at?: string | null
+          metric_data?: Json | null
+          metric_type?: string
+          metric_value?: number | null
+          repository_id?: string
+        }
+        Relationships: []
+      }
+      github_commits: {
+        Row: {
+          additions: number | null
+          author_email: string | null
+          author_name: string | null
+          changed_files: number | null
+          commit_date: string | null
+          committer_email: string | null
+          committer_name: string | null
+          created_at: string
+          deletions: number | null
+          id: string
+          integration_id: string
+          message: string
+          raw_data: Json | null
+          repository_id: string
+          sha: string
+          synced_at: string | null
+        }
+        Insert: {
+          additions?: number | null
+          author_email?: string | null
+          author_name?: string | null
+          changed_files?: number | null
+          commit_date?: string | null
+          committer_email?: string | null
+          committer_name?: string | null
+          created_at?: string
+          deletions?: number | null
+          id?: string
+          integration_id: string
+          message: string
+          raw_data?: Json | null
+          repository_id: string
+          sha: string
+          synced_at?: string | null
+        }
+        Update: {
+          additions?: number | null
+          author_email?: string | null
+          author_name?: string | null
+          changed_files?: number | null
+          commit_date?: string | null
+          committer_email?: string | null
+          committer_name?: string | null
+          created_at?: string
+          deletions?: number | null
+          id?: string
+          integration_id?: string
+          message?: string
+          raw_data?: Json | null
+          repository_id?: string
+          sha?: string
+          synced_at?: string | null
+        }
+        Relationships: []
+      }
+      github_contributors: {
+        Row: {
+          additions: number | null
+          avatar_url: string | null
+          commits_count: number | null
+          contributions: number | null
+          created_at: string
+          deletions: number | null
+          github_id: number
+          id: string
+          integration_id: string
+          login: string
+          raw_data: Json | null
+          repository_id: string
+          synced_at: string | null
+        }
+        Insert: {
+          additions?: number | null
+          avatar_url?: string | null
+          commits_count?: number | null
+          contributions?: number | null
+          created_at?: string
+          deletions?: number | null
+          github_id: number
+          id?: string
+          integration_id: string
+          login: string
+          raw_data?: Json | null
+          repository_id: string
+          synced_at?: string | null
+        }
+        Update: {
+          additions?: number | null
+          avatar_url?: string | null
+          commits_count?: number | null
+          contributions?: number | null
+          created_at?: string
+          deletions?: number | null
+          github_id?: number
+          id?: string
+          integration_id?: string
+          login?: string
+          raw_data?: Json | null
+          repository_id?: string
+          synced_at?: string | null
+        }
+        Relationships: []
+      }
+      github_pull_requests: {
+        Row: {
+          assignee_login: string | null
+          author_login: string | null
+          base_branch: string | null
+          body: string | null
+          closed_at: string | null
+          created_at: string
+          draft: boolean | null
+          github_id: number
+          head_branch: string | null
+          id: string
+          integration_id: string
+          mergeable: boolean | null
+          merged: boolean | null
+          merged_at: string | null
+          number: number
+          raw_data: Json | null
+          repository_id: string
+          state: string
+          synced_at: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          assignee_login?: string | null
+          author_login?: string | null
+          base_branch?: string | null
+          body?: string | null
+          closed_at?: string | null
+          created_at?: string
+          draft?: boolean | null
+          github_id: number
+          head_branch?: string | null
+          id?: string
+          integration_id: string
+          mergeable?: boolean | null
+          merged?: boolean | null
+          merged_at?: string | null
+          number: number
+          raw_data?: Json | null
+          repository_id: string
+          state: string
+          synced_at?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          assignee_login?: string | null
+          author_login?: string | null
+          base_branch?: string | null
+          body?: string | null
+          closed_at?: string | null
+          created_at?: string
+          draft?: boolean | null
+          github_id?: number
+          head_branch?: string | null
+          id?: string
+          integration_id?: string
+          mergeable?: boolean | null
+          merged?: boolean | null
+          merged_at?: string | null
+          number?: number
+          raw_data?: Json | null
+          repository_id?: string
+          state?: string
+          synced_at?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      github_repositories: {
+        Row: {
+          created_at: string
+          default_branch: string | null
+          description: string | null
+          forks_count: number | null
+          full_name: string
+          github_id: number
+          id: string
+          integration_id: string
+          language: string | null
+          name: string
+          open_issues_count: number | null
+          private: boolean | null
+          project_id: string | null
+          pushed_at: string | null
+          raw_data: Json | null
+          size_kb: number | null
+          stars_count: number | null
+          synced_at: string | null
+          updated_at: string | null
+          watchers_count: number | null
+        }
+        Insert: {
+          created_at?: string
+          default_branch?: string | null
+          description?: string | null
+          forks_count?: number | null
+          full_name: string
+          github_id: number
+          id?: string
+          integration_id: string
+          language?: string | null
+          name: string
+          open_issues_count?: number | null
+          private?: boolean | null
+          project_id?: string | null
+          pushed_at?: string | null
+          raw_data?: Json | null
+          size_kb?: number | null
+          stars_count?: number | null
+          synced_at?: string | null
+          updated_at?: string | null
+          watchers_count?: number | null
+        }
+        Update: {
+          created_at?: string
+          default_branch?: string | null
+          description?: string | null
+          forks_count?: number | null
+          full_name?: string
+          github_id?: number
+          id?: string
+          integration_id?: string
+          language?: string | null
+          name?: string
+          open_issues_count?: number | null
+          private?: boolean | null
+          project_id?: string | null
+          pushed_at?: string | null
+          raw_data?: Json | null
+          size_kb?: number | null
+          stars_count?: number | null
+          synced_at?: string | null
+          updated_at?: string | null
+          watchers_count?: number | null
+        }
+        Relationships: []
+      }
       insight_alerts: {
         Row: {
           alert_message: string
