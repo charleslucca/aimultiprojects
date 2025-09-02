@@ -144,30 +144,39 @@ export default function Projects() {
 
       setClients(clientsWithCounts);
 
-      // Load projects with client information and integrations - force fresh data
+      // Load projects with client information - simple query first
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select(`
           *,
-          clients(name, status_color),
-          project_integrations(id, integration_type, integration_subtype, is_active, configuration, metadata)
+          clients(name, status_color)
         `)
         .order('name');
 
       if (projectsError) throw projectsError;
 
-      // Process projects with integrations data from the single query
+      // Load all active integrations separately
+      const { data: integrationsData, error: integrationsError } = await supabase
+        .from('project_integrations')
+        .select('*')
+        .eq('is_active', true);
+
+      if (integrationsError) throw integrationsError;
+
+      console.log('Raw integrations data:', integrationsData);
+      console.log('Raw projects data:', projectsData?.map(p => ({ id: p.id, name: p.name })));
+
+      // Manually map integrations to projects
       const projectsWithIntegrations = (projectsData || []).map(project => {
-        // Filter only active integrations from the included data
-        const activeIntegrations = (project.project_integrations || []).filter(
-          (integration: any) => integration.is_active === true
+        const projectIntegrations = (integrationsData || []).filter(
+          integration => integration.project_id === project.id
         );
         
-        console.log(`Project "${project.name}": ${activeIntegrations.length} active integrations`, activeIntegrations);
+        console.log(`Project "${project.name}" (${project.id}): ${projectIntegrations.length} active integrations`, projectIntegrations);
         
         return {
           ...project,
-          integrations: activeIntegrations
+          integrations: projectIntegrations
         };
       });
 
