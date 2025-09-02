@@ -16,6 +16,7 @@ interface AzureDevOpsConfig {
   organization: string;
   project?: string;
   project_name?: string;
+  token?: string;
   personal_access_token?: string;
   personalAccessToken?: string;
   area_paths?: string[];
@@ -41,7 +42,7 @@ serve(async (req) => {
         organization: config.organization,
         project: config.project,
         project_name: config.project_name,
-        has_token: !!config.personal_access_token || !!config.personalAccessToken,
+        has_token: !!config.token || !!config.personal_access_token || !!config.personalAccessToken,
         area_paths: config.area_paths,
         areaPaths: config.areaPaths
       });
@@ -73,6 +74,7 @@ async function testConnection(config: AzureDevOpsConfig) {
   console.log('Config received:', {
     provided: !!config,
     organization: config?.organization,
+    has_token: !!config?.token,
     has_personal_access_token: !!config?.personal_access_token,
     has_personalAccessToken: !!config?.personalAccessToken,
     project: config?.project,
@@ -85,7 +87,7 @@ async function testConnection(config: AzureDevOpsConfig) {
   }
   
   const { organization } = config;
-  const personalAccessToken = config.personal_access_token || config.personalAccessToken;
+  const personalAccessToken = config.token || config.personal_access_token || config.personalAccessToken;
   
   console.log('Extracted values:', {
     organization,
@@ -145,7 +147,7 @@ async function syncIntegration(integration_id: string, config?: AzureDevOpsConfi
   console.log('Config provided in sync call:', {
     provided: !!config,
     organization: config?.organization,
-    has_token: !!config?.personal_access_token || !!config?.personalAccessToken
+    has_token: !!config?.token || !!config?.personal_access_token || !!config?.personalAccessToken
   });
   
   // Get integration details to get configuration if not provided
@@ -180,6 +182,7 @@ async function syncIntegration(integration_id: string, config?: AzureDevOpsConfi
     organization: finalConfig.organization,
     project: finalConfig.project,
     project_name: finalConfig.project_name,
+    has_token: !!finalConfig.token,
     has_personal_access_token: !!finalConfig.personal_access_token,
     has_personalAccessToken: !!finalConfig.personalAccessToken,
     area_paths: finalConfig.area_paths,
@@ -188,7 +191,7 @@ async function syncIntegration(integration_id: string, config?: AzureDevOpsConfi
 
   const organization = finalConfig.organization;
   const project = finalConfig.project || finalConfig.project_name;
-  const personalAccessToken = finalConfig.personal_access_token || finalConfig.personalAccessToken;
+  const personalAccessToken = finalConfig.token || finalConfig.personal_access_token || finalConfig.personalAccessToken;
   
   console.log('Extracted sync values:', {
     organization,
