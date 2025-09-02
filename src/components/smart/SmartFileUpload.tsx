@@ -132,6 +132,16 @@ export function SmartFileUpload({
         body: formData,
       });
 
+      // Handle AI service overload
+      if (directResponse.data?.error === 'temporary_overload') {
+        const retryAfter = directResponse.data.retry_after || 180;
+        throw new Error(`⚠️ Serviço de IA temporariamente sobrecarregado. Tente novamente em ${Math.ceil(retryAfter/60)} minutos.`);
+      }
+
+      if (directResponse.error) {
+        throw new Error(directResponse.error.message || 'Erro na análise direta');
+      }
+
       if (directResponse.data?.success) {
         console.log('Direct analysis successful!');
         
@@ -167,8 +177,30 @@ export function SmartFileUpload({
 
         return directResult;
       }
-    } catch (directError) {
-      console.warn('Direct analysis failed, falling back to traditional upload:', directError);
+    } catch (directError: any) {
+      console.warn('Direct analysis failed:', directError);
+      
+      // Show user-friendly error message for overloaded service
+      if (directError.message?.includes('sobrecarregado')) {
+        toast({
+          title: "Serviço de IA Sobrecarregado",
+          description: directError.message,
+          variant: "destructive",
+        });
+        
+        // Mark as error and don't fallback to traditional upload
+        setUploading(prev => prev.map(up => 
+          up.id === fileId ? { ...up, status: 'error', error: directError.message } : up
+        ));
+        
+        setTimeout(() => {
+          setUploading(prev => prev.filter(up => up.id !== fileId));
+        }, 5000);
+        
+        throw directError;
+      }
+      
+      // For other errors, reset to fallback mode
       setUploading(prev => prev.map(up => 
         up.id === fileId ? { ...up, progress: 0, status: 'uploading' } : up
       ));

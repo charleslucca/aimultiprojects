@@ -303,6 +303,37 @@ Seja conversacional na resposta mas sempre inclua os artefatos estruturados em J
   } catch (error) {
     console.error('Direct file analysis error:', error);
     
+    // Handle OpenAI API specific errors
+    if (error.message?.includes('429') || error.message?.includes('rate') || error.message?.includes('overload')) {
+      return new Response(
+        JSON.stringify({
+          error: 'temporary_overload',
+          message: '⚠️ O serviço de IA está temporariamente sobrecarregado.\n\n**Seus arquivos foram salvos automaticamente.** Aguarde 2-3 minutos e tente novamente.\n\nSe o problema persistir, recarregue a página.',
+          retry_after: 180,
+          type: 'rate_limit_error'
+        }),
+        {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Handle timeout errors
+    if (error.message?.includes('timeout') || error.message?.includes('Analysis timeout')) {
+      return new Response(
+        JSON.stringify({
+          error: 'timeout',
+          message: '⏱️ A análise do arquivo demorou mais que o esperado.\n\nTente novamente ou use um arquivo menor.',
+          type: 'timeout_error'
+        }),
+        {
+          status: 408,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ 
         error: error.message,
