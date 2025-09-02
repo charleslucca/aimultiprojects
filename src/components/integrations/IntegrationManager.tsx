@@ -24,6 +24,7 @@ interface Integration {
 interface IntegrationManagerProps {
   projectId: string;
   clientId?: string;
+  onIntegrationAdded?: () => void;
 }
 
 const INTEGRATION_TYPES = [
@@ -53,7 +54,7 @@ const INTEGRATION_TYPES = [
   }
 ];
 
-export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerProps) => {
+export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: IntegrationManagerProps) => {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -167,6 +168,11 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
       setConfig({});
       setTestResult({});
       loadIntegrations();
+      
+      // Notify parent component
+      if (onIntegrationAdded) {
+        onIntegrationAdded();
+      }
     } catch (error: any) {
       toast({
         title: 'Erro ao adicionar integração',

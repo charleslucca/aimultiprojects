@@ -345,6 +345,11 @@ export default function Projects() {
                 <IntegrationManager 
                   projectId={selectedProject}
                   clientId={projects.find(p => p.id === selectedProject)?.client_id}
+                  onIntegrationAdded={() => {
+                    loadData();
+                    setIntegrationModalOpen(false);
+                    setSelectedProject(null);
+                  }}
                 />
               </div>
             </div>
@@ -550,6 +555,11 @@ export default function Projects() {
               <IntegrationManager 
                 projectId={selectedProject}
                 clientId={projects.find(p => p.id === selectedProject)?.client_id}
+                onIntegrationAdded={() => {
+                  loadData();
+                  setIntegrationModalOpen(false);
+                  setSelectedProject(null);
+                }}
               />
             </div>
           </div>
