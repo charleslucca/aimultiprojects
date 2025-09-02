@@ -32,13 +32,7 @@ Sempre responda de forma **conversacional, estruturada e profissional** seguindo
 
 [Explicação do que foi analisado e principais achados]
 
-**👥 Personas Identificadas** 
-
-1. **Nome da Persona (Papel)**
-   - Necessidades: [lista de necessidades]
-   - Dores: [principais problemas]
-
-**📝 Requisitos e Escopo**
+**📝 Escopo e Requisitos**
 
 **Funcionais**
 - [Lista de requisitos funcionais]
@@ -46,9 +40,39 @@ Sempre responda de forma **conversacional, estruturada e profissional** seguindo
 **Não funcionais** 
 - [Lista de requisitos não funcionais]
 
+**👥 Personas Identificadas** 
+
+1. **Nome da Persona (Papel)**
+   - Necessidades: [lista de necessidades]
+   - Dores: [principais problemas]
+
 **🎯 Business Model Canvas**
 
-[Explicação dos principais elementos do BMC]
+[Explicação dos principais elementos do BMC com foco em:
+- Proposta de Valor
+- Segmentos de Clientes  
+- Canais
+- Relacionamento com Clientes
+- Fontes de Receita
+- Recursos Principais
+- Atividades Principais
+- Parcerias Principais
+- Estrutura de Custos]
+
+**📋 Product Backlog (alto nível)**
+
+[Lista de épicos e features principais organizados por prioridade]
+
+**👉 Histórias de Usuários (alto nível)**
+
+1. **Como** [tipo de usuário] **eu quero** [funcionalidade] **para que** [benefício]
+2. **Como** [tipo de usuário] **eu quero** [funcionalidade] **para que** [benefício]
+
+**✅ Definição de Pronto (alto nível)**
+
+- [Critérios de qualidade e entrega]
+- [Padrões de aceitação]
+- [Requisitos técnicos mínimos]
 
 **Próximos Passos Sugeridos**
 - [Ações recomendadas]
