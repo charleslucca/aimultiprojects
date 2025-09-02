@@ -156,53 +156,87 @@ serve(async (req) => {
 
     console.log('Sending request to OpenAI with', messages.length, 'messages');
 
-    // Call OpenAI API with timeout and retry logic
-    const makeOpenAICall = async (model: string, timeoutMs: number = 25000) => {
+    // Call OpenAI API with improved timeout and retry logic
+    const makeOpenAICall = async (model: string, timeoutMs: number = 12000) => {
+      console.log(`Trying ${model} with ${timeoutMs}ms timeout...`);
+      
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const timeoutId = setTimeout(() => {
+        console.log(`Timeout reached for ${model}, aborting...`);
+        controller.abort();
+      }, timeoutMs);
 
       try {
+        // Configure parameters based on model type
+        const requestBody: any = {
+          model,
+          messages,
+          stream: false,
+        };
+
+        // Handle different model parameter requirements
+        if (model.includes('gpt-4o')) {
+          // Legacy models use max_tokens and support temperature
+          requestBody.max_tokens = 1500;
+          requestBody.temperature = 0.7;
+        } else {
+          // Newer models (GPT-5, GPT-4.1) use max_completion_tokens, no temperature
+          requestBody.max_completion_tokens = 1500;
+        }
+
+        console.log(`Making request to ${model}...`);
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            model,
-            messages,
-            max_completion_tokens: 2000,
-            stream: false,
-          }),
+          body: JSON.stringify(requestBody),
           signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
+        console.log(`Response received from ${model}, status:`, response.status);
 
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
         }
 
-        return await response.json();
+        const result = await response.json();
+        console.log(`Successfully got response from ${model}`);
+        return result;
+        
       } catch (error) {
         clearTimeout(timeoutId);
+        console.log(`Error with ${model}:`, error.message);
         throw error;
       }
     };
 
-    // Try different models with fallback
+    // Try models with improved fallback strategy - start with most reliable
     let data;
+    let modelUsed = 'gpt-4o-mini';
+    
     try {
-      console.log('Trying GPT-5...');
-      data = await makeOpenAICall('gpt-5-2025-08-07', 25000);
+      // Start with most reliable and fastest model
+      console.log('Starting with GPT-4o-mini (most reliable)...');
+      data = await makeOpenAICall('gpt-4o-mini', 8000);
+      modelUsed = 'gpt-4o-mini';
     } catch (error) {
-      console.log('GPT-5 failed, trying GPT-4.1:', error.message);
+      console.log('GPT-4o-mini failed, trying GPT-4.1:', error.message);
       try {
-        data = await makeOpenAICall('gpt-4.1-2025-04-14', 20000);
+        data = await makeOpenAICall('gpt-4.1-2025-04-14', 10000);
+        modelUsed = 'gpt-4.1-2025-04-14';
       } catch (error2) {
-        console.log('GPT-4.1 failed, trying GPT-4o-mini:', error2.message);
-        data = await makeOpenAICall('gpt-4o-mini', 15000);
+        console.log('GPT-4.1 failed, trying GPT-5:', error2.message);
+        try {
+          data = await makeOpenAICall('gpt-5-2025-08-07', 12000);
+          modelUsed = 'gpt-5-2025-08-07';
+        } catch (error3) {
+          console.error('All models failed:', error3.message);
+          throw new Error('Todos os modelos de IA estão temporariamente indisponíveis. Tente novamente em alguns instantes.');
+        }
       }
     }
 
@@ -260,7 +294,7 @@ serve(async (req) => {
       JSON.stringify({
         response: aiResponse,
         artifacts: extractedArtifacts,
-        model_used: data.model || 'unknown'
+        model_used: modelUsed
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
