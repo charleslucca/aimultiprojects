@@ -170,12 +170,13 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
       'team_performance': 'Performance da Equipe',
       // GitHub AI Insights Types
       'github_security': 'Segurança do Código',
-      'github_quality': 'Qualidade do Código',
+      'github_quality': 'Qualidade do Código', 
       'github_testing': 'Cobertura de Testes',
       'github_performance': 'Performance do Código',
       'github_pipeline': 'Saúde do Pipeline',
       'github_dev_performance': 'Performance da Equipe',
-      'github_release_prediction': 'Previsão de Release'
+      'github_release_prediction': 'Previsão de Release',
+      'github_code_insights': 'GitHub Code Insights'
     };
     return types[type as keyof typeof types] || type.replace(/_/g, ' ');
   };

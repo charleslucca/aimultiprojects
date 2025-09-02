@@ -85,14 +85,14 @@ const JiraCockpitProject: React.FC = () => {
         if (issuesError) throw issuesError;
         setIssues(issuesData || []);
 
-        // Load AI insights for jira projects
+        // Load AI insights for jira projects AND GitHub insights for this project
         const jiraProjectIds = jiraProjectData.map(jp => jp.id);
         const { data: insightsData, error: insightsError } = await supabase
           .from('jira_ai_insights')
           .select('*')
-          .in('project_id', jiraProjectIds)
+          .or(`project_id.in.(${jiraProjectIds.join(',')}),project_id.eq.${projectId}`)
           .order('generated_at', { ascending: false })
-          .limit(50);
+          .limit(100);
 
         if (insightsError) throw insightsError;
         setInsights(insightsData || []);

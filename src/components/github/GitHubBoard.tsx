@@ -190,12 +190,7 @@ export const GitHubBoard: React.FC<GitHubBoardProps> = ({ projectId }) => {
 
       if (error) throw error;
 
-      toast.success(`${buttonText} gerado com sucesso!`);
-      
-      // Redirect to insights page after a short delay
-      setTimeout(() => {
-        window.location.href = `/projects/${projectId}/jira`;
-      }, 1500);
+      toast.success(`${buttonText} gerado com sucesso! Vá para a aba Insights IA para ver os resultados.`);
 
     } catch (error: any) {
       console.error('GitHub insight generation error:', error);

@@ -14,9 +14,12 @@ serve(async (req) => {
 
   const startTime = Date.now();
   
-  // Implement function timeout (25 seconds)
+  // Implement function timeout (40 seconds for individual insights, 60 for all)
+  const isGenerateAll = (await req.clone().json()).action === 'generate_github_insights';
+  const timeoutMs = isGenerateAll ? 60000 : 30000;
+  
   const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Function timeout: Operation exceeded 25 seconds')), 25000)
+    setTimeout(() => reject(new Error(`Function timeout: Operation exceeded ${timeoutMs/1000} seconds`)), timeoutMs)
   );
 
   const workPromise = async () => {
@@ -129,18 +132,32 @@ serve(async (req) => {
   }
 });
 
-// Generate all GitHub insights for a project
+// Generate all GitHub insights for a project with delay between calls
 async function generateAllGitHubInsights(supabaseClient: any, openAIApiKey: string, integrationId: string, projectId: string) {
   console.log('Starting GitHub insights generation for:', { integrationId, projectId });
   
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  
   try {
-    // Generate all types of insights
+    // Generate insights with delays to avoid timeouts
     await performSecurityAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
+    await delay(1000);
+    
     await performCodeQualityAssessment(supabaseClient, openAIApiKey, integrationId, projectId);
+    await delay(1000);
+    
     await performTestCoverageAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
+    await delay(1000);
+    
     await performPerformanceAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
+    await delay(1000);
+    
     await performPipelineHealthAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
+    await delay(1000);
+    
     await performDevPerformanceAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
+    await delay(1000);
+    
     await performReleasePredictionAnalysis(supabaseClient, openAIApiKey, integrationId, projectId);
     
     console.log('GitHub insights generation completed successfully');
