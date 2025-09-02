@@ -261,6 +261,17 @@ async function syncWorkItems(integration_id: string, organization: string, proje
     }
   }
   
+  // Build WHERE clause properly
+  let whereClause = '1=1'; // Base condition that's always true
+  
+  if (project && project.trim()) {
+    whereClause = `[System.TeamProject] = '${project.trim()}'`;
+  }
+  
+  if (areaPathFilter) {
+    whereClause += areaPathFilter;
+  }
+  
   const wiqlQuery = {
     query: `
       SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State], [System.AssignedTo], 
@@ -269,9 +280,9 @@ async function syncWorkItems(integration_id: string, organization: string, proje
              [Microsoft.VSTS.Scheduling.CompletedWork], [System.Priority], [Microsoft.VSTS.Common.Severity],
              [System.Tags], [System.Parent], [System.CreatedDate], [System.ChangedDate], 
              [Microsoft.VSTS.Common.ResolvedDate], [Microsoft.VSTS.Common.ClosedDate]
-       FROM WorkItems 
-       WHERE ${project ? `[System.TeamProject] = '${project}'` : '1=1'}${areaPathFilter}
-       ORDER BY [System.ChangedDate] DESC
+        FROM WorkItems 
+        WHERE ${whereClause}
+        ORDER BY [System.ChangedDate] DESC
     `
   };
 
@@ -285,7 +296,10 @@ async function syncWorkItems(integration_id: string, organization: string, proje
   });
 
   if (!wiqlResponse.ok) {
-    throw new Error(`Failed to query work items: ${wiqlResponse.status} ${wiqlResponse.statusText}`);
+    const errorBody = await wiqlResponse.text();
+    console.error(`WIQL Query failed:`, wiqlQuery.query);
+    console.error(`Error response:`, errorBody);
+    throw new Error(`Failed to query work items: ${wiqlResponse.status} ${wiqlResponse.statusText}. Error: ${errorBody}`);
   }
 
   const wiqlResult = await wiqlResponse.json();
