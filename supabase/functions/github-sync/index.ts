@@ -94,6 +94,11 @@ serve(async (req) => {
 
     console.log('Repository synced:', repository.full_name)
 
+    // Initialize sync statistics
+    let commitsData = []
+    let prsData = []
+    let contributorsData = []
+
     // Sync recent commits (last 100)
     const commitsResponse = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/commits?per_page=100`,
@@ -101,7 +106,7 @@ serve(async (req) => {
     )
 
     if (commitsResponse.ok) {
-      const commitsData = await commitsResponse.json()
+      commitsData = await commitsResponse.json()
       
       for (const commit of commitsData) {
         try {
@@ -127,6 +132,8 @@ serve(async (req) => {
         }
       }
       console.log(`Synced ${commitsData.length} commits`)
+    } else {
+      console.error('Failed to fetch commits:', commitsResponse.statusText)
     }
 
     // Sync pull requests
@@ -136,7 +143,7 @@ serve(async (req) => {
     )
 
     if (prsResponse.ok) {
-      const prsData = await prsResponse.json()
+      prsData = await prsResponse.json()
       
       for (const pr of prsData) {
         try {
@@ -171,6 +178,8 @@ serve(async (req) => {
         }
       }
       console.log(`Synced ${prsData.length} pull requests`)
+    } else {
+      console.error('Failed to fetch pull requests:', prsResponse.statusText)
     }
 
     // Sync contributors
@@ -180,7 +189,7 @@ serve(async (req) => {
     )
 
     if (contributorsResponse.ok) {
-      const contributorsData = await contributorsResponse.json()
+      contributorsData = await contributorsResponse.json()
       
       for (const contributor of contributorsData) {
         try {
@@ -203,6 +212,8 @@ serve(async (req) => {
         }
       }
       console.log(`Synced ${contributorsData.length} contributors`)
+    } else {
+      console.error('Failed to fetch contributors:', contributorsResponse.statusText)
     }
 
     // Update integration last sync time
