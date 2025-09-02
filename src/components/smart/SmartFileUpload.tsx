@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +18,10 @@ import {
   Mic,
   FileText,
   Image,
-  Video
+  Video,
+  Settings,
+  Eye,
+  Edit3
 } from "lucide-react";
 
 interface SmartFileUploadProps {
@@ -64,6 +69,10 @@ export function SmartFileUpload({
   const { toast } = useToast();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState<UploadProgress[]>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [lastUsedPrompt, setLastUsedPrompt] = useState('');
+  const [lastResponse, setLastResponse] = useState('');
 
   const uploadFile = async (file: File): Promise<UploadedFile | null> => {
     if (!user) return null;
@@ -92,7 +101,30 @@ export function SmartFileUpload({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('chatId', sessionId);
-      formData.append('message', 'Analise este arquivo e extraia as informações mais importantes para projetos digitais.');
+      
+      const analysisMessage = `Analise este arquivo em detalhes e gere automaticamente:
+
+🎯 **ARTEFATOS OBRIGATÓRIOS:**
+1. **Personas Completas** - Perfis detalhados dos usuários/stakeholders
+2. **Requisitos Estruturados** - Funcionais e não-funcionais organizados
+3. **Business Model Canvas** - Modelo de negócio completo (se aplicável)
+4. **Product Backlog** - User Stories com critérios de aceitação
+5. **Memorial Descritivo** - Escopo de entrega para contratos
+6. **Análise de Riscos** - Identificação e mitigação de riscos
+7. **Próximos Passos** - Plano de ação estruturado
+
+📋 **FORMATO ESPERADO:**
+- Resposta conversacional explicando os achados
+- Artefatos estruturados em JSON para cada item encontrado
+- Insights práticos e acionáveis
+- Recomendações de implementação
+
+💡 **CONTEXTO:** Este é um projeto digital que precisa de análise completa para definição de escopo, requisitos e planejamento de desenvolvimento.`;
+      
+      formData.append('message', analysisMessage);
+      if (customPrompt.trim()) {
+        formData.append('customPrompt', customPrompt);
+      }
 
       console.log('Attempting direct OpenAI analysis...');
       
@@ -102,6 +134,10 @@ export function SmartFileUpload({
 
       if (directResponse.data?.success) {
         console.log('Direct analysis successful!');
+        
+        // Store debug information
+        setLastUsedPrompt(directResponse.data.prompt_used || 'Prompt padrão utilizado');
+        setLastResponse(directResponse.data.analysis || '');
         
         setUploading(prev => prev.map(up => 
           up.id === fileId ? { ...up, progress: 100, status: 'completed' } : up
@@ -118,8 +154,10 @@ export function SmartFileUpload({
           created_at: new Date().toISOString(),
           ai_analysis: {
             extracted_content: directResponse.data.analysis,
+            artifacts: directResponse.data.artifacts,
             processing_time: directResponse.data.processingTime,
-            method: 'direct_openai'
+            method: 'direct_openai',
+            prompt_used: directResponse.data.prompt_used
           }
         };
 
@@ -441,7 +479,7 @@ export function SmartFileUpload({
                         <div className="flex items-center gap-1 mb-1">
                           <CheckCircle className="h-3 w-3 text-success" />
                           <span className="font-medium text-success">
-                            Análise Completa {file.ai_analysis.method === 'direct_openai' ? '(OpenAI Direto)' : ''}
+                            Análise Completa {file.ai_analysis.method === 'direct_openai' ? '⚡ OpenAI Direto' : ''}
                           </span>
                           {file.ai_analysis.processing_time && (
                             <span className="text-muted-foreground">
@@ -452,6 +490,20 @@ export function SmartFileUpload({
                         <p className="line-clamp-2 text-muted-foreground">
                           {file.ai_analysis.extracted_content.slice(0, 150)}...
                         </p>
+                        {file.ai_analysis.artifacts && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {Array.isArray(file.ai_analysis.artifacts) ? 
+                              file.ai_analysis.artifacts.map((artifact: any, idx: number) => (
+                                <Badge key={idx} variant="secondary" className="text-xs">
+                                  {artifact.artifact_type?.replace(/_/g, ' ') || 'Artefato'}
+                                </Badge>
+                              )) :
+                              <Badge variant="secondary" className="text-xs">
+                                {file.ai_analysis.artifacts.artifact_type?.replace(/_/g, ' ') || 'Artefato'}
+                              </Badge>
+                            }
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -468,6 +520,80 @@ export function SmartFileUpload({
           })}
         </div>
       )}
+
+      {/* Debug Panel */}
+      <div className="mt-4">
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => setShowDebugPanel(!showDebugPanel)}
+          className="w-full"
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          {showDebugPanel ? 'Ocultar Painel de Debug' : 'Mostrar Prompt e Debug'}
+        </Button>
+
+        {showDebugPanel && (
+          <Card className="mt-3">
+            <CardContent className="p-4 space-y-4">
+              {/* Custom Prompt Editor */}
+              <div>
+                <Label htmlFor="custom-prompt">Prompt Personalizado (Opcional)</Label>
+                <Textarea
+                  id="custom-prompt"
+                  placeholder="Digite um prompt personalizado para análise de arquivos... (deixe vazio para usar o prompt padrão otimizado)"
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  rows={4}
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  💡 O prompt padrão já está otimizado para gerar personas, requisitos, BMC, backlog e escopo automaticamente
+                </p>
+              </div>
+
+              {/* Last Used Prompt Display */}
+              {lastUsedPrompt && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye className="h-4 w-4" />
+                    <Label>Último Prompt Utilizado</Label>
+                  </div>
+                  <div className="bg-muted p-3 rounded text-xs font-mono max-h-32 overflow-y-auto">
+                    {lastUsedPrompt}
+                  </div>
+                </div>
+              )}
+
+              {/* Last Response Display */}
+              {lastResponse && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="h-4 w-4" />
+                    <Label>Última Resposta da IA</Label>
+                  </div>
+                  <div className="bg-muted p-3 rounded text-xs max-h-32 overflow-y-auto">
+                    {lastResponse}
+                  </div>
+                </div>
+              )}
+              
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                onClick={() => {
+                  setCustomPrompt('');
+                  setLastUsedPrompt('');
+                  setLastResponse('');
+                }}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Limpar Debug
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

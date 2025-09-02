@@ -11,6 +11,49 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+// Advanced system prompt for complete analysis
+const EXPERT_SYSTEM_PROMPT = `Você é um especialista sênior em produtos e projetos digitais com mais de 15 anos de experiência. Sua especialidade é analisar requisitos, extrair personas, definir escopos e gerar artefatos profissionais.
+
+SUAS CAPACIDADES:
+1. **Análise de Documentos**: Extrai informações valiosas de qualquer tipo de arquivo
+2. **Definição de Personas**: Cria personas detalhadas baseadas em dados reais  
+3. **Levantamento de Requisitos**: Identifica requisitos funcionais e não-funcionais
+4. **Business Model Canvas**: Gera BMC completo e estruturado
+5. **Product Backlog**: Cria User Stories com Definition of Done
+6. **Escopo de Entrega**: Memorial descritivo para contratos
+
+COMPORTAMENTO COM ARQUIVOS:
+Quando analisar arquivos, você DEVE automaticamente:
+1. **Responder conversacionalmente** explicando o que encontrou
+2. **Extrair automaticamente** personas, requisitos e insights
+3. **Gerar artefatos estruturados** quando apropriado
+4. **Sugerir próximos passos** de forma natural
+
+FORMATO DE RESPOSTA OBRIGATÓRIO:
+1. **SEMPRE responda de forma conversacional primeiro** - explique o que analisou
+2. **SEMPRE gere artefatos estruturados** em JSON quando houver conteúdo:
+
+\`\`\`json
+{
+  "type": "artifact",
+  "artifact_type": "business_model_canvas|product_backlog|delivery_scope|personas|requirements",
+  "title": "Nome do Artefato",
+  "content": {
+    // Conteúdo estruturado do artefato
+  }
+}
+\`\`\`
+
+PARA ESTE ARQUIVO ESPECÍFICO, GERE AUTOMATICAMENTE:
+- Personas detalhadas (se identificar usuários/stakeholders)
+- Requisitos funcionais e não-funcionais completos
+- Business Model Canvas (se possível extrair modelo de negócio)
+- Product Backlog com User Stories detalhadas
+- Memorial Descritivo/Escopo de Entrega para contratos
+- Análise de riscos e próximos passos
+
+Seja conversacional mas sempre gere os artefatos estruturados solicitados.`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,13 +63,25 @@ serve(async (req) => {
     const formData = await req.formData();
     const file = formData.get('file') as File;
     const chatId = formData.get('chatId') as string;
-    const message = formData.get('message') as string || 'Analise este arquivo e extraia as informações mais importantes.';
+    const message = formData.get('message') as string || `Analise este arquivo em detalhes e gere automaticamente:
+1. Personas completas dos usuários/stakeholders identificados
+2. Requisitos funcionais e não-funcionais estruturados
+3. Business Model Canvas (se aplicável)
+4. Product Backlog com User Stories detalhadas 
+5. Memorial Descritivo/Escopo de Entrega para contratos
+6. Análise de riscos e próximos passos
+
+Seja conversacional na resposta mas sempre inclua os artefatos estruturados em JSON.`;
+
+    const customPrompt = formData.get('customPrompt') as string;
+    const finalPrompt = customPrompt || EXPERT_SYSTEM_PROMPT;
 
     if (!file || !chatId) {
       throw new Error('File and chatId are required');
     }
 
     console.log(`Direct processing file: ${file.name} (${file.type}, ${file.size} bytes)`);
+    console.log(`Using prompt: ${finalPrompt.substring(0, 200)}...`);
 
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -62,15 +117,8 @@ serve(async (req) => {
         'OpenAI-Beta': 'assistants=v2'
       },
       body: JSON.stringify({
-        name: 'File Analysis Assistant',
-        instructions: `Você é um especialista em análise de arquivos para projetos digitais. Analise o arquivo fornecido e extraia:
-1. Informações principais e conceitos-chave
-2. Requisitos ou especificações identificadas
-3. Oportunidades de melhoria ou implementação
-4. Insights estratégicos relevantes
-5. Próximos passos sugeridos
-
-Seja detalhado mas objetivo. Forneça insights práticos e acionáveis.`,
+        name: 'Expert Product Analysis Assistant',
+        instructions: finalPrompt,
         model: 'gpt-4.1-2025-04-14',
         tools: [{ type: 'file_search' }],
         tool_resources: {
@@ -131,7 +179,7 @@ Seja detalhado mas objetivo. Forneça insights práticos e acionáveis.`,
     // Step 5: Poll for completion (with timeout)
     let runStatus = run;
     let attempts = 0;
-    const maxAttempts = 30; // 30 seconds max
+    const maxAttempts = 40; // 40 seconds max for complex analysis
 
     while (runStatus.status === 'queued' || runStatus.status === 'in_progress') {
       if (attempts >= maxAttempts) {
@@ -169,6 +217,26 @@ Seja detalhado mas objetivo. Forneça insights práticos e acionáveis.`,
 
     console.log(`Analysis completed successfully (${analysisResult.length} chars)`);
 
+    // Extract structured artifacts from response
+    let extractedArtifacts = null;
+    const jsonMatches = analysisResult.matchAll(/```json\s*(\{[\s\S]*?\})\s*```/g);
+    
+    const artifacts = [];
+    for (const match of jsonMatches) {
+      try {
+        const parsed = JSON.parse(match[1]);
+        if (parsed.type === 'artifact') {
+          artifacts.push(parsed);
+        }
+      } catch (e) {
+        console.log('Failed to parse JSON artifact:', e.message);
+      }
+    }
+    
+    if (artifacts.length > 0) {
+      extractedArtifacts = artifacts.length === 1 ? artifacts[0] : artifacts;
+    }
+
     // Step 7: Save to database
     const { error: dbError } = await supabase
       .from('smart_hub_uploads')
@@ -181,8 +249,10 @@ Seja detalhado mas objetivo. Forneça insights práticos e acionáveis.`,
         processing_status: 'completed',
         ai_analysis: {
           extracted_content: analysisResult,
+          artifacts: extractedArtifacts,
           openai_file_id: openAIFile.id,
-          processing_time: new Date().toISOString()
+          processing_time: new Date().toISOString(),
+          prompt_used: finalPrompt.substring(0, 500) + '...'
         }
       });
 
@@ -221,7 +291,9 @@ Seja detalhado mas objetivo. Forneça insights práticos e acionáveis.`,
       JSON.stringify({ 
         success: true,
         analysis: analysisResult,
-        processingTime: `${attempts}s`
+        artifacts: extractedArtifacts,
+        processingTime: `${attempts}s`,
+        prompt_used: finalPrompt
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
