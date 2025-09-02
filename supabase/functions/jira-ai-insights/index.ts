@@ -61,7 +61,7 @@ serve(async (req) => {
     }
 
     if (action === 'suggest_priority_rebalancing') {
-      const suggestions = await suggestPriorityRebalancing(supabaseClient, openAIApiKey, project_keys);
+      const suggestions = await suggestPriorityRebalancing(supabaseClient, openAIApiKey, project_keys, jiraProjectId);
       return new Response(JSON.stringify({ suggestions }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -696,7 +696,7 @@ async function analyzeTeamPerformance(supabaseClient: any, openAIApiKey: string,
   }
 }
 
-async function suggestPriorityRebalancing(supabaseClient: any, openAIApiKey: string, projectKeys: string[]) {
+async function suggestPriorityRebalancing(supabaseClient: any, openAIApiKey: string, projectKeys: string[], jiraProjectId?: string) {
   // Get all available project keys if none specified
   const projectKeysToUse = projectKeys.length > 0 ? projectKeys : ['GM', 'TEC', 'LEARNJIRA'];
   
@@ -756,7 +756,36 @@ async function suggestPriorityRebalancing(supabaseClient: any, openAIApiKey: str
       content = content.replace(/```json\s*/g, '').replace(/```\s*$/g, '');
     }
     
-    return JSON.parse(content);
+    const analysis = JSON.parse(content);
+
+    // Store insight in unified_insights
+    if (jiraProjectId) {
+      await supabaseClient
+        .from('unified_insights')
+        .insert({
+          insight_type: 'priority_rebalancing',
+          source_type: 'jira',
+          title: 'Sugestões de Rebalanceamento de Prioridades',
+          content: JSON.stringify({
+            ...analysis,
+            recommendations: Array.isArray(analysis.increase_priority) 
+              ? analysis.increase_priority.concat(analysis.decrease_priority || [])
+              : [analysis.reasoning || "Rebalanceamento de prioridades sugerido"]
+          }),
+          metadata: {
+            priority_health_score: analysis.priority_health_score,
+            executive_summary: `🎯 Rebalanceamento de Prioridades • Score: ${Math.round((analysis.priority_health_score || 0.8) * 100)}/100`,
+            alert_category: 'PRIORITY'
+          },
+          confidence_score: analysis.priority_health_score || 0.8,
+          criticality_score: analysis.priority_health_score < 0.6 ? 0.7 : 0.3,
+          project_id: jiraProjectId,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+          source_origin: 'jira-ai-insights'
+        });
+    }
+    
+    return analysis;
 
   } catch (error) {
     console.error('Failed to suggest priority rebalancing:', error);
@@ -979,24 +1008,23 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
             ...analysis,
             total_cost: totalProjectCost,
             completed_cost: completedIssueCost,
-            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0
+            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0,
+            recommendations: Array.isArray(analysis.budget_recommendations) 
+              ? analysis.budget_recommendations 
+              : [analysis.budget_recommendations || "Análise de custos concluída"]
           }),
           metadata: {
             total_cost: totalProjectCost,
             completed_cost: completedIssueCost,
-            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0
+            cost_completion_rate: totalProjectCost > 0 ? (completedIssueCost / totalProjectCost) : 0,
+            executive_summary: `💰 Custo Total: R$ ${totalProjectCost.toFixed(2)} • ${Math.round((completedIssueCost / totalProjectCost) * 100)}% executado`,
+            alert_category: 'FINANCIAL'
           },
           confidence_score: analysis.cost_efficiency_score || 0.8,
+          criticality_score: analysis.cost_efficiency_score < 0.5 ? 0.8 : 0.3,
           project_id: jiraProjectId,
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           source_origin: 'jira-ai-insights'
-        });
-    }
-            recommendations: Array.isArray(analysis.budget_recommendations) 
-              ? analysis.budget_recommendations 
-              : [analysis.budget_recommendations || "Análise de custos concluída"]
-          },
-          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 days
         });
     }
 
@@ -1006,6 +1034,11 @@ async function performCostAnalysis(supabaseClient: any, openAIApiKey: string, pr
       issues_with_costs: costData,
       ...analysis
     };
+  } catch (error) {
+    console.error('Failed to perform cost analysis:', error);
+    throw error;
+  }
+}
 
 async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, jiraProjectId?: string) {
   // Get all available project keys if none specified
@@ -1125,18 +1158,22 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
           title: 'Análise de Produtividade',
           content: JSON.stringify({
             ...analysis,
-            productivity_data: productivityData
+            productivity_data: productivityData,
+            recommendations: Array.isArray(analysis.productivity_recommendations) 
+              ? analysis.productivity_recommendations 
+              : [analysis.productivity_recommendations || "Análise de produtividade concluída"]
           }),
           metadata: {
             team_productivity_score: analysis.team_productivity_score,
-            productivity_data: productivityData
+            productivity_data: productivityData,
+            executive_summary: `📈 Produtividade: Score ${Math.round((analysis.team_productivity_score || 0.8) * 100)}/100`,
+            alert_category: 'PRODUCTIVITY'
           },
           confidence_score: analysis.team_productivity_score || 0.8,
+          criticality_score: analysis.team_productivity_score < 0.6 ? 0.8 : 0.3,
           project_id: jiraProjectId,
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           source_origin: 'jira-ai-insights'
-        });
-    }
         });
     }
 
@@ -1144,6 +1181,12 @@ async function analyzeProductivityEconomics(supabaseClient: any, openAIApiKey: s
       productivity_data: productivityData,
       ...analysis
     };
+
+  } catch (error) {
+    console.error('Failed to analyze productivity economics:', error);
+    throw error;
+  }
+}
 
 async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, projectKeys: string[], configId?: string, jiraProjectId?: string) {
   // Get all available project keys if none specified
@@ -1257,26 +1300,25 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
             ...analysis,
             projected_total_cost: projectedTotalCost,
             current_spend: totalBudgetSpent,
-            spend_rate: spendRate
+            spend_rate: spendRate,
+            completion_rate: completionRate,
+            recommendations: Array.isArray(analysis.optimization_suggestions) 
+              ? analysis.optimization_suggestions 
+              : [analysis.optimization_suggestions || "Monitorar orçamento e gastos do projeto"]
           }),
           metadata: {
             financial_risk_score: analysis.financial_risk_score,
             projected_total_cost: projectedTotalCost,
             current_spend: totalBudgetSpent,
-            spend_rate: spendRate
+            spend_rate: spendRate,
+            executive_summary: `💸 Orçamento: R$ ${totalBudgetSpent.toFixed(2)} gastos • Risco ${Math.round((analysis.financial_risk_score || 0.5) * 100)}/100`,
+            alert_category: 'BUDGET'
           },
           confidence_score: analysis.financial_risk_score || 0.5,
+          criticality_score: analysis.financial_risk_score > 0.7 ? 0.9 : 0.4,
           project_id: jiraProjectId,
           expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
           source_origin: 'jira-ai-insights'
-        });
-    }
-            completion_rate: completionRate,
-            recommendations: Array.isArray(analysis.optimization_suggestions) 
-              ? analysis.optimization_suggestions 
-              : [analysis.optimization_suggestions || "Monitorar orçamento e gastos do projeto"]
-          },
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
         });
     }
 
@@ -1287,3 +1329,9 @@ async function generateBudgetAlerts(supabaseClient: any, openAIApiKey: string, p
       completion_rate: completionRate,
       ...analysis
     };
+
+  } catch (error) {
+    console.error('Failed to generate budget alerts:', error);
+    throw error;
+  }
+}

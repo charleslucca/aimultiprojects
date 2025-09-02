@@ -56,20 +56,42 @@ const AIInsightsPanel: React.FC<AIInsightsPanelProps> = ({ insights, issues, pro
     return insights.map(insight => {
       // All insights now come from unified_insights table
       try {
-        const parsedContent = typeof insight.content === 'string' ? JSON.parse(insight.content) : insight.content;
+        let parsedContent = {};
+        
+        // Handle different content formats
+        if (typeof insight.content === 'string') {
+          // Skip parsing if content is just a success message
+          if (insight.content.includes('insight processado com sucesso') || 
+              insight.content.includes('processado com sucesso') ||
+              insight.content.includes('sucesso')) {
+            // Use title as fallback content
+            parsedContent = { 
+              recommendations: [insight.title || 'Insight gerado com sucesso'],
+              summary: insight.title || 'Análise concluída'
+            };
+          } else {
+            parsedContent = JSON.parse(insight.content);
+          }
+        } else if (insight.content && typeof insight.content === 'object') {
+          parsedContent = insight.content;
+        }
+        
         return {
           ...insight,
           insight_data: parsedContent,
-          executive_summary: insight.metadata?.executive_summary || insight.title,
+          executive_summary: insight.metadata?.executive_summary || insight.title || 'Insight de IA',
           alert_category: insight.metadata?.alert_category || 'GENERAL',
           generated_at: insight.created_at
         };
       } catch (e) {
-        console.error('Error parsing insight content:', e);
+        console.error('Error parsing insight content:', e, 'Content:', insight.content);
         return {
           ...insight,
-          insight_data: {},
-          executive_summary: insight.title,
+          insight_data: {
+            recommendations: [insight.title || 'Erro ao processar insight'],
+            summary: 'Erro no processamento'
+          },
+          executive_summary: insight.title || 'Erro no insight',
           alert_category: 'GENERAL',
           generated_at: insight.created_at
         };
