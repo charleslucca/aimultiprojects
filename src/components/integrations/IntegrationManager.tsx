@@ -61,6 +61,7 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
   const [selectedType, setSelectedType] = useState('');
   const [config, setConfig] = useState<any>({});
   const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [testResult, setTestResult] = useState<{ success?: boolean; message?: string; }>({});
   const [showPATInstructions, setShowPATInstructions] = useState(false);
   const { toast } = useToast();
@@ -91,7 +92,17 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
   };
 
   const handleAddIntegration = async () => {
+    console.log('🔍 DEBUG: Iniciando processo de salvamento da integração');
+    console.log('🔍 DEBUG: Dados de entrada:', {
+      selectedType,
+      config,
+      testResult,
+      projectId,
+      clientId
+    });
+
     if (!selectedType) {
+      console.log('❌ DEBUG: Tipo de integração não selecionado');
       toast({
         title: 'Campos obrigatórios',
         description: 'Selecione o tipo de integração',
@@ -103,6 +114,7 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
     // Validate required fields based on integration type
     if (selectedType === 'jira') {
       if (!config.url || !config.username || !config.token) {
+        console.log('❌ DEBUG: Campos Jira obrigatórios não preenchidos');
         toast({
           title: 'Campos obrigatórios',
           description: 'Preencha URL, usuário e token para integração Jira',
@@ -112,6 +124,7 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       }
       
       if (!testResult.success) {
+        console.log('❌ DEBUG: Teste de conexão Jira não realizado com sucesso');
         toast({
           title: 'Teste de conexão obrigatório',
           description: 'Execute o teste de conexão com sucesso antes de salvar',
@@ -123,6 +136,7 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
 
     if (selectedType === 'azure_boards') {
       if (!config.organization || !config.token) {
+        console.log('❌ DEBUG: Campos Azure obrigatórios não preenchidos');
         toast({
           title: 'Campos obrigatórios',
           description: 'Preencha organização e PAT para integração Azure Boards',
@@ -132,6 +146,7 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       }
       
       if (!testResult.success) {
+        console.log('❌ DEBUG: Teste de conexão Azure não realizado com sucesso');
         toast({
           title: 'Teste de conexão obrigatório',
           description: 'Execute o teste de conexão com sucesso antes de salvar',
@@ -143,6 +158,7 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
 
     if (selectedType === 'github') {
       if (!config.owner || !config.repo || !config.token) {
+        console.log('❌ DEBUG: Campos GitHub obrigatórios não preenchidos');
         toast({
           title: 'Campos obrigatórios',
           description: 'Preencha owner, repositório e token para integração GitHub',
@@ -152,6 +168,8 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       }
       
       if (!testResult.success) {
+        console.log('❌ DEBUG: Teste de conexão GitHub não realizado com sucesso');
+        console.log('🔍 DEBUG: testResult atual:', testResult);
         toast({
           title: 'Teste de conexão obrigatório',
           description: 'Execute o teste de conexão com sucesso antes de salvar',
@@ -161,22 +179,38 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
       }
     }
 
+    console.log('✅ DEBUG: Validações passaram, iniciando salvamento no banco');
+    setIsSaving(true);
+
     try {
+      const integrationData = {
+        project_id: projectId,
+        client_id: clientId,
+        integration_type: selectedType,
+        integration_subtype: selectedType === 'azure_boards' ? 'devops' : null,
+        configuration: config,
+        is_active: true,
+        sync_enabled: true,
+        metadata: { 
+          created_via: 'integration_manager',
+          test_result: testResult,
+          created_at: new Date().toISOString()
+        }
+      };
 
-      const { error } = await supabase
+      console.log('🔍 DEBUG: Dados a serem inseridos no banco:', integrationData);
+
+      const { data, error } = await supabase
         .from('project_integrations')
-        .insert({
-          project_id: projectId,
-          client_id: clientId,
-          integration_type: selectedType,
-          integration_subtype: selectedType === 'azure_boards' ? 'devops' : null,
-          configuration: config,
-          is_active: true,
-          sync_enabled: true,
-          metadata: { created_via: 'integration_manager' }
-        });
+        .insert(integrationData)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.log('❌ DEBUG: Erro ao inserir no banco:', error);
+        throw error;
+      }
+
+      console.log('✅ DEBUG: Integração inserida com sucesso:', data);
 
       toast({
         title: 'Integração adicionada',
@@ -198,11 +232,14 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
         }, 300);
       }
     } catch (error: any) {
+      console.log('❌ DEBUG: Erro durante salvamento:', error);
       toast({
         title: 'Erro ao adicionar integração',
-        description: error.message,
+        description: `Erro detalhado: ${error.message || JSON.stringify(error)}`,
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -984,8 +1021,15 @@ export const IntegrationManager = ({ projectId, clientId, onIntegrationAdded }: 
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                   Cancelar
                 </Button>
-                <Button onClick={handleAddIntegration}>
-                  Adicionar Integração
+                <Button onClick={handleAddIntegration} disabled={isSaving}>
+                  {isSaving ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+                      Salvando...
+                    </>
+                  ) : (
+                    'Adicionar Integração'
+                  )}
                 </Button>
               </div>
             </div>
