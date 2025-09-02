@@ -527,6 +527,34 @@ export default function Projects() {
         itemName={deleteClientModal.client?.name || ""}
         isLoading={isDeletingClient}
       />
+
+      {selectedProject && integrationModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-background rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Gerenciar Integrações</h2>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setIntegrationModalOpen(false);
+                    setSelectedProject(null);
+                  }}
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+            <div className="p-6">
+              <IntegrationManager 
+                projectId={selectedProject}
+                clientId={projects.find(p => p.id === selectedProject)?.client_id}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
