@@ -3,13 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { Plus, Settings, Trash2, RefreshCw, Zap } from 'lucide-react';
+import { Plus, Settings, Trash2, RefreshCw, Zap, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Integration {
   id: string;
@@ -58,6 +59,9 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('');
   const [config, setConfig] = useState<any>({});
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [testResult, setTestResult] = useState<{ success?: boolean; message?: string; }>({});
+  const [showPATInstructions, setShowPATInstructions] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -105,20 +109,27 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
       return;
     }
 
-    if (selectedType === 'azure_boards' && (!config.organization || !config.token)) {
-      toast({
-        title: 'Campos obrigatórios',
-        description: 'Preencha organização e token para integração Azure Boards',
-        variant: 'destructive',
-      });
-      return;
+    if (selectedType === 'azure_boards') {
+      if (!config.organization || !config.token) {
+        toast({
+          title: 'Campos obrigatórios',
+          description: 'Preencha organização e PAT para integração Azure Boards',
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      if (!testResult.success) {
+        toast({
+          title: 'Teste de conexão obrigatório',
+          description: 'Execute o teste de conexão com sucesso antes de salvar',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     try {
-      // Test connection first for supported integrations
-      if (selectedType === 'azure_boards') {
-        await testAzureConnection(config);
-      }
 
       const { error } = await supabase
         .from('project_integrations')
@@ -143,6 +154,7 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
       setIsAddDialogOpen(false);
       setSelectedType('');
       setConfig({});
+      setTestResult({});
       loadIntegrations();
     } catch (error: any) {
       toast({
@@ -153,23 +165,52 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
     }
   };
 
-  const testAzureConnection = async (config: any) => {
-    const { data, error } = await supabase.functions.invoke('azure-boards-sync', {
-      body: { 
-        action: 'test_connection', 
-        config: {
-          organization: config.organization,
-          personalAccessToken: config.token
-        }
-      }
-    });
-    
-    if (error) {
-      throw new Error(`Erro ao testar conexão: ${error.message}`);
+  const testAzureConnection = async () => {
+    if (!config.organization || !config.token) {
+      toast({
+        title: 'Campos obrigatórios',
+        description: 'Preencha organização e PAT antes de testar',
+        variant: 'destructive',
+      });
+      return;
     }
+
+    setIsTestingConnection(true);
+    setTestResult({});
     
-    if (!data?.success) {
-      throw new Error('Falha na conexão com Azure DevOps');
+    try {
+      const { data, error } = await supabase.functions.invoke('azure-boards-sync', {
+        body: { 
+          action: 'test_connection', 
+          config: {
+            organization: config.organization,
+            personalAccessToken: config.token
+          }
+        }
+      });
+      
+      if (error) {
+        throw new Error(`Erro ao testar conexão: ${error.message}`);
+      }
+      
+      if (data?.success) {
+        setTestResult({ success: true, message: data.message });
+        toast({
+          title: 'Conexão bem-sucedida',
+          description: data.message,
+        });
+      } else {
+        throw new Error('Falha na conexão com Azure DevOps');
+      }
+    } catch (error: any) {
+      setTestResult({ success: false, message: error.message });
+      toast({
+        title: 'Erro na conexão',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsTestingConnection(false);
     }
   };
 
@@ -335,34 +376,139 @@ export const IntegrationManager = ({ projectId, clientId }: IntegrationManagerPr
               <Input
                 id="azure-org"
                 value={config.organization || ''}
-                onChange={(e) => setConfig({ ...config, organization: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, organization: e.target.value });
+                  setTestResult({});
+                }}
                 placeholder="nome-da-organizacao"
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Apenas o nome da organização (sem https://dev.azure.com/)
               </p>
             </div>
+            
             <div>
               <Label htmlFor="azure-project">Projeto</Label>
               <Input
                 id="azure-project"
                 value={config.project || ''}
-                onChange={(e) => setConfig({ ...config, project: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, project: e.target.value });
+                  setTestResult({});
+                }}
                 placeholder="nome-do-projeto"
               />
             </div>
+            
             <div>
-              <Label htmlFor="azure-token">Personal Access Token *</Label>
+              <Label htmlFor="azure-areas">Caminhos de Área (opcional)</Label>
+              <Input
+                id="azure-areas"
+                value={config.areaPaths || ''}
+                onChange={(e) => {
+                  setConfig({ ...config, areaPaths: e.target.value });
+                  setTestResult({});
+                }}
+                placeholder="Area1, Area2\\SubArea"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Separar múltiplas áreas por vírgula (deixe vazio para sincronizar todas)
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="azure-token">Personal Access Token (PAT) *</Label>
               <Input
                 id="azure-token"
                 type="password"
                 value={config.token || ''}
-                onChange={(e) => setConfig({ ...config, token: e.target.value })}
+                onChange={(e) => {
+                  setConfig({ ...config, token: e.target.value });
+                  setTestResult({});
+                }}
                 placeholder="Seu PAT do Azure DevOps"
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Token com permissões de leitura em Work Items e Projects
-              </p>
+              
+              <Collapsible open={showPATInstructions} onOpenChange={setShowPATInstructions}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="mt-2 p-0 h-auto text-xs text-muted-foreground hover:text-foreground">
+                    {showPATInstructions ? <ChevronDown className="h-3 w-3 mr-1" /> : <ChevronRight className="h-3 w-3 mr-1" />}
+                    Como obter o Personal Access Token?
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2 space-y-2">
+                  <div className="text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg space-y-2">
+                    <p className="font-medium">Passos para criar um PAT:</p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Acesse Azure DevOps e clique no ícone de usuário</li>
+                      <li>Selecione "Personal access tokens"</li>
+                      <li>Clique em "New Token"</li>
+                      <li>Configure as permissões necessárias:</li>
+                      <ul className="list-disc list-inside ml-4 space-y-1">
+                        <li><strong>Work items:</strong> Read</li>
+                        <li><strong>Project and team:</strong> Read</li>
+                        <li><strong>Analytics:</strong> Read (opcional)</li>
+                      </ul>
+                    </ol>
+                    <div className="flex items-center gap-2 pt-2 border-t border-border">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => window.open('https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate', '_blank')}
+                        className="text-xs"
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Documentação oficial
+                      </Button>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Button 
+                  type="button"
+                  variant="outline" 
+                  onClick={testAzureConnection}
+                  disabled={isTestingConnection || !config.organization || !config.token}
+                  className="flex items-center gap-2"
+                >
+                  {isTestingConnection ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  ) : (
+                    <Zap className="h-4 w-4" />
+                  )}
+                  {isTestingConnection ? 'Testando...' : 'Testar Conexão'}
+                </Button>
+                
+                {testResult.success !== undefined && (
+                  <Badge variant={testResult.success ? 'default' : 'destructive'}>
+                    {testResult.success ? 'Conexão OK' : 'Falhou'}
+                  </Badge>
+                )}
+              </div>
+              
+              {testResult.message && (
+                <p className={`text-xs ${testResult.success ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {testResult.message}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <Label htmlFor="auto-sync" className="font-medium">Sincronização Automática</Label>
+                <p className="text-xs text-muted-foreground">
+                  Sincronizar dados automaticamente a cada hora
+                </p>
+              </div>
+              <Switch
+                id="auto-sync"
+                checked={config.autoSync !== false}
+                onCheckedChange={(checked) => setConfig({ ...config, autoSync: checked })}
+              />
             </div>
           </>
         );

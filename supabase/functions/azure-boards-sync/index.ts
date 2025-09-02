@@ -16,6 +16,7 @@ interface AzureDevOpsConfig {
   organization: string;
   project: string;
   personalAccessToken: string;
+  areaPaths?: string;
 }
 
 serve(async (req) => {
@@ -101,7 +102,7 @@ async function syncIntegration(integration_id: string, config: AzureDevOpsConfig
   await syncProject(integration_id, organization, project, personalAccessToken);
   
   // Sync work items
-  await syncWorkItems(integration_id, organization, project, personalAccessToken);
+  await syncWorkItems(integration_id, organization, project, personalAccessToken, config.areaPaths);
   
   // Sync iterations
   await syncIterations(integration_id, organization, project, personalAccessToken);
@@ -188,11 +189,30 @@ async function syncProject(integration_id: string, organization: string, project
     }, { onConflict: 'integration_id,azure_id' });
 }
 
-async function syncWorkItems(integration_id: string, organization: string, project: string, token: string) {
+async function syncWorkItems(integration_id: string, organization: string, project: string, token: string, areaPaths?: string) {
   console.log(`Syncing work items for project: ${project}`);
+  
+  // Get integration details to check for area paths
+  const { data: integration } = await supabase
+    .from('project_integrations')
+    .select('configuration')
+    .eq('id', integration_id)
+    .single();
+
+  const configAreaPaths = integration?.configuration?.areaPaths || areaPaths;
   
   // Get work items using WIQL (Work Item Query Language)
   const wiqlUrl = `https://dev.azure.com/${organization}/${project}/_apis/wit/wiql?api-version=7.0`;
+  
+  // Build area path filter if specified
+  let areaPathFilter = '';
+  if (configAreaPaths && configAreaPaths.trim()) {
+    const paths = configAreaPaths.split(',').map(path => path.trim()).filter(Boolean);
+    if (paths.length > 0) {
+      const areaConditions = paths.map(path => `[System.AreaPath] UNDER '${project}\\${path}'`).join(' OR ');
+      areaPathFilter = ` AND (${areaConditions})`;
+    }
+  }
   
   const wiqlQuery = {
     query: `
@@ -203,7 +223,7 @@ async function syncWorkItems(integration_id: string, organization: string, proje
              [System.Tags], [System.Parent], [System.CreatedDate], [System.ChangedDate], 
              [Microsoft.VSTS.Common.ResolvedDate], [Microsoft.VSTS.Common.ClosedDate]
       FROM WorkItems 
-      WHERE [System.TeamProject] = '${project}'
+      WHERE [System.TeamProject] = '${project}'${areaPathFilter}
       ORDER BY [System.ChangedDate] DESC
     `
   };
