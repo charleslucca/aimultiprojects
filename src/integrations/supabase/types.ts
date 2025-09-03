@@ -50,6 +50,33 @@ export type Database = {
         }
         Relationships: []
       }
+      authorized_emails: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          email: string
+          id: string
+          is_active: boolean
+          notes: string | null
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          email: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+        }
+        Relationships: []
+      }
       azure_iterations: {
         Row: {
           azure_id: string
