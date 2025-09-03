@@ -64,11 +64,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setUserProfile(profile);
       setIsAuthorized(profile?.is_authorized || false);
-      
-      // Redirect unauthorized users
-      if (profile && !profile.is_authorized) {
-        window.location.href = '/access-denied';
-      }
     } catch (error) {
       console.error('Error loading user profile:', error);
       setIsAuthorized(false);
