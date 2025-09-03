@@ -45,9 +45,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     isPublicRoute 
   });
   
-  // Only use auth guard for protected routes
-  const authGuard = isPublicRoute ? null : useAuthGuard();
-  const canAccess = isPublicRoute || (authGuard?.canAccess ?? false);
+  // Always call useAuthGuard but disable redirects for public routes
+  const authGuard = useAuthGuard(!isPublicRoute);
+  const canAccess = isPublicRoute || authGuard.canAccess;
 
   // Show loading screen during auth initialization (only for protected routes)
   if (loading && !isPublicRoute) {

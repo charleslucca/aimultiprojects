@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-export const useAuthGuard = () => {
+export const useAuthGuard = (shouldRedirect: boolean = true) => {
   const { user, loading, isAuthorized } = useAuth();
   const navigate = useNavigate();
 
@@ -11,11 +11,12 @@ export const useAuthGuard = () => {
       user: user?.email, 
       loading, 
       isAuthorized,
-      willRedirect: !loading && (!user || (user && !isAuthorized))
+      shouldRedirect,
+      willRedirect: shouldRedirect && !loading && (!user || (user && !isAuthorized))
     });
     
-    // Don't redirect while still loading
-    if (loading) return;
+    // Don't redirect if disabled or while still loading
+    if (!shouldRedirect || loading) return;
 
     // Redirect to login if not authenticated
     if (!user) {
@@ -32,7 +33,7 @@ export const useAuthGuard = () => {
     }
     
     console.log('🔒 AuthGuard: User authorized, no redirect needed');
-  }, [user, loading, isAuthorized, navigate]);
+  }, [user, loading, isAuthorized, navigate, shouldRedirect]);
 
   return {
     user,
