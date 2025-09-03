@@ -9,6 +9,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OnePageView from "./pages/OnePageView";
 import Auth from "./pages/Auth";
+import AccessDenied from "./pages/AccessDenied";
 import Projects from "./pages/Projects";
 import Dashboard from "./pages/Dashboard";
 import Team from "./pages/Team";
@@ -65,6 +66,7 @@ const App: React.FC = () => {
               <AppLayout>
                 <Routes>
                   <Route path="/" element={<OnePageView />} />
+                  <Route path="/access-denied" element={<AccessDenied />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/projects/:projectId/jira" element={<JiraCockpitProject />} />

@@ -5,6 +5,7 @@ import { Bell, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAuthGuard } from '@/hooks/useAuthGuard';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -28,17 +29,19 @@ const MinimalLayout: React.FC<AppLayoutProps> = ({ children }) => (
 );
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
-  const { user, loading } = useAuth();
+  const { loading } = useAuth();
+  const { canAccess } = useAuthGuard();
 
-  console.log('AppLayout render:', { user: !!user, loading });
+  console.log('AppLayout render:', { loading, canAccess });
 
   // Show loading screen during auth initialization
   if (loading) {
     return <LoadingScreen />;
   }
 
-  // Show minimal layout for unauthenticated users
-  if (!user) {
+  // For unauthenticated users or unauthorized users, 
+  // the useAuthGuard hook will handle redirects
+  if (!canAccess) {
     return <MinimalLayout>{children}</MinimalLayout>;
   }
 

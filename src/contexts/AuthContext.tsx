@@ -7,6 +7,8 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  isAuthorized: boolean;
+  userProfile: any | null;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, firstName?: string, lastName?: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -46,7 +48,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
   const { toast } = useToast();
+
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      
+      setUserProfile(profile);
+      setIsAuthorized(profile?.is_authorized || false);
+      
+      // Redirect unauthorized users
+      if (profile && !profile.is_authorized) {
+        window.location.href = '/access-denied';
+      }
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      setIsAuthorized(false);
+    }
+  };
+
+  const checkEmailAuthorization = async (email: string) => {
+    try {
+      const { data, error } = await supabase.rpc('is_email_authorized', {
+        email_address: email
+      });
+      
+      if (error) throw error;
+      return data || false;
+    } catch (error) {
+      console.error('Error checking email authorization:', error);
+      return false;
+    }
+  };
 
   const refreshAuth = async () => {
     try {
@@ -55,6 +96,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+      }
     } catch (error) {
       console.error('Error refreshing auth:', error);
     }
@@ -75,9 +120,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (event === 'SIGNED_IN' && session?.user) {
-          // Future: load user profile data here when tables are ready
+          // Load user profile and check authorization
+          setTimeout(() => {
+            loadUserProfile(session.user.id);
+          }, 0);
         } else if (event === 'SIGNED_OUT') {
-          // Future: cleanup user data
+          setUserProfile(null);
+          setIsAuthorized(false);
         }
         
         // Only set loading to false after auth state change
@@ -117,6 +166,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       
+      // Check if email is authorized before attempting login
+      const isEmailAuthorized = await checkEmailAuthorization(email);
+      if (!isEmailAuthorized) {
+        toast({
+          title: "Acesso não autorizado",
+          description: "Este email não está autorizado a acessar o sistema.",
+          variant: "destructive",
+        });
+        return { error: new Error('Email não autorizado') };
+      }
+      
       // Clean up existing state
       cleanupAuthState();
       
@@ -142,6 +202,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
+        // Load profile and check authorization
+        await loadUserProfile(data.user.id);
+        
         toast({
           title: "Login realizado com sucesso!",
           description: "Bem-vindo de volta.",
@@ -169,6 +232,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signUp = async (email: string, password: string, firstName?: string, lastName?: string) => {
     try {
       setLoading(true);
+      
+      // Check if email is authorized before allowing signup
+      const isEmailAuthorized = await checkEmailAuthorization(email);
+      if (!isEmailAuthorized) {
+        toast({
+          title: "Email não autorizado",
+          description: "Este email não está autorizado a criar uma conta no sistema. Entre em contato com o administrador.",
+          variant: "destructive",
+        });
+        return { error: new Error('Email não autorizado') };
+      }
       
       // Clean up existing state
       cleanupAuthState();
@@ -244,6 +318,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     session,
     loading,
+    isAuthorized,
+    userProfile,
     signIn,
     signUp,
     signOut,
