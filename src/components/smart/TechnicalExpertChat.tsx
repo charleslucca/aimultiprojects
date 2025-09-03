@@ -135,7 +135,7 @@ Primeiro, selecione um repositório GitHub e uma ação, ou faça uma pergunta t
 
       if (chatError) throw chatError;
 
-      if (chatData?.messages) {
+      if (chatData?.messages && Array.isArray(chatData.messages)) {
         const parsedMessages = chatData.messages.map((msg: any) => ({
           ...msg,
           timestamp: new Date(msg.timestamp)
@@ -255,8 +255,7 @@ Primeiro, selecione um repositório GitHub e uma ação, ou faça uma pergunta t
       console.log('Sending technical analysis request:', requestBody);
 
       const { data, error } = await supabase.functions.invoke('analyze-repository', {
-        body: requestBody,
-        signal: abortController.signal
+        body: requestBody
       });
 
       if (abortController.signal.aborted) return;
