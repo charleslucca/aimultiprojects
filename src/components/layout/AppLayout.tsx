@@ -31,17 +31,23 @@ const MinimalLayout: React.FC<AppLayoutProps> = ({ children }) => (
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
-  const { loading } = useAuth();
+  const { user, loading, isAuthorized } = useAuth();
   
   // Routes that don't need authentication guard
   const publicRoutes = ['/auth', '/access-denied'];
   const isPublicRoute = publicRoutes.includes(location.pathname);
   
+  console.log('🔍 AppLayout DEBUG:', { 
+    pathname: location.pathname, 
+    user: user?.email,
+    loading, 
+    isAuthorized,
+    isPublicRoute 
+  });
+  
   // Only use auth guard for protected routes
-  const authGuard = useAuthGuard();
-  const { canAccess } = isPublicRoute ? { canAccess: true } : authGuard;
-
-  console.log('AppLayout render:', { pathname: location.pathname, loading, canAccess, isPublicRoute });
+  const authGuard = isPublicRoute ? null : useAuthGuard();
+  const canAccess = isPublicRoute || (authGuard?.canAccess ?? false);
 
   // Show loading screen during auth initialization (only for protected routes)
   if (loading && !isPublicRoute) {
