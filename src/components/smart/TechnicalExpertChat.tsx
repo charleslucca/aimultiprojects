@@ -41,12 +41,17 @@ interface GitHubRepository {
   full_name: string;
   description?: string;
   language?: string;
+  hierarchy?: {
+    client: string;
+    project: string;
+  };
 }
 
 const technicalActions = [
   {
     id: 'repository_analysis',
     name: 'Análise de Repositório',
+    shortName: 'Repositório',
     description: 'Documentação completa da arquitetura',
     icon: FileText,
     color: 'bg-primary text-primary-foreground'
@@ -54,6 +59,7 @@ const technicalActions = [
   {
     id: 'security_analysis',
     name: 'Análise de Segurança',
+    shortName: 'Segurança',
     description: 'Review de vulnerabilidades',
     icon: Shield,
     color: 'bg-destructive text-destructive-foreground'
@@ -61,6 +67,7 @@ const technicalActions = [
   {
     id: 'performance_analysis',
     name: 'Análise de Performance',
+    shortName: 'Performance',
     description: 'Identificação de bottlenecks',
     icon: Zap,
     color: 'bg-warning text-warning-foreground'
@@ -68,6 +75,7 @@ const technicalActions = [
   {
     id: 'quality_analysis',
     name: 'Análise de Qualidade',
+    shortName: 'Qualidade',
     description: 'Code review automatizado',
     icon: Search,
     color: 'bg-accent text-accent-foreground'
@@ -75,6 +83,7 @@ const technicalActions = [
   {
     id: 'test_generation',
     name: 'Geração de Testes',
+    shortName: 'Testes',
     description: 'Sugestões de testes automatizados',
     icon: TestTube,
     color: 'bg-success text-success-foreground'
@@ -149,16 +158,29 @@ Primeiro, selecione um repositório GitHub e uma ação, ou faça uma pergunta t
 
   const loadRepositories = async () => {
     try {
-      // Load GitHub repositories from existing integrations
+      // Load GitHub repositories - simplified approach for now
       const { data: repos, error } = await supabase
         .from('github_repositories')
-        .select('id, name, full_name, description, language')
+        .select('id, name, full_name, description, language, integration_id')
         .limit(50);
 
       if (error) throw error;
 
       if (repos) {
-        setRepositories(repos);
+        // For now, set repositories without hierarchy - will be improved later
+        const transformedRepos = repos.map(repo => ({
+          id: repo.id,
+          name: repo.name,
+          full_name: repo.full_name,
+          description: repo.description,
+          language: repo.language,
+          hierarchy: {
+            client: 'Cliente',
+            project: 'Projeto'
+          }
+        }));
+        
+        setRepositories(transformedRepos as any);
       }
     } catch (error) {
       console.error('Error loading repositories:', error);
@@ -176,7 +198,7 @@ Primeiro, selecione um repositório GitHub e uma ação, ou faça uma pergunta t
         .from('smart_hub_chats')
         .insert([
           {
-            chat_type: 'technical_expert',
+            chat_name: 'Especialista Técnico',
             messages: [],
             user_id: (await supabase.auth.getUser()).data.user?.id
           }
@@ -357,13 +379,25 @@ Primeiro, selecione um repositório GitHub e uma ação, ou faça uma pergunta t
                 <SelectContent>
                   {repositories.map((repo) => (
                     <SelectItem key={repo.id} value={repo.id}>
-                      <div className="flex items-center gap-2">
-                        <GitBranch className="w-4 h-4" />
-                        <span>{repo.name}</span>
-                        {repo.language && (
-                          <Badge variant="secondary" className="text-xs">
-                            {repo.language}
-                          </Badge>
+                      <div className="flex flex-col items-start gap-1 py-1">
+                        <div className="flex items-center gap-2">
+                          <GitBranch className="w-4 h-4" />
+                          <span className="font-medium">{repo.name}</span>
+                          {repo.language && (
+                            <Badge variant="secondary" className="text-xs">
+                              {repo.language}
+                            </Badge>
+                          )}
+                        </div>
+                        {repo.hierarchy && (
+                          <div className="text-xs text-muted-foreground ml-6">
+                            {repo.hierarchy.client} → {repo.hierarchy.project}
+                          </div>
+                        )}
+                        {repo.description && (
+                          <div className="text-xs text-muted-foreground ml-6 truncate max-w-[300px]">
+                            {repo.description}
+                          </div>
                         )}
                       </div>
                     </SelectItem>
@@ -387,7 +421,7 @@ Primeiro, selecione um repositório GitHub e uma ação, ou faça uma pergunta t
                       className="justify-start text-xs h-8"
                     >
                       <IconComponent className="w-3 h-3 mr-1" />
-                      {action.name.split(' ')[0]}
+                      {(action as any).shortName}
                     </Button>
                   );
                 })}
