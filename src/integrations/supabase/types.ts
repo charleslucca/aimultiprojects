@@ -2540,8 +2540,11 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string | null
+          first_name: string | null
           full_name: string | null
           id: string
+          is_authorized: boolean
+          last_name: string | null
           organization_id: string | null
           role_in_organization: string | null
           updated_at: string | null
@@ -2550,8 +2553,11 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string | null
+          first_name?: string | null
           full_name?: string | null
           id?: string
+          is_authorized?: boolean
+          last_name?: string | null
           organization_id?: string | null
           role_in_organization?: string | null
           updated_at?: string | null
@@ -2560,8 +2566,11 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string | null
+          first_name?: string | null
           full_name?: string | null
           id?: string
+          is_authorized?: boolean
+          last_name?: string | null
           organization_id?: string | null
           role_in_organization?: string | null
           updated_at?: string | null
@@ -2635,6 +2644,10 @@ export type Database = {
     Functions: {
       is_admin_user: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_email_authorized: {
+        Args: { email_address: string }
         Returns: boolean
       }
       validate_stage_completeness: {
