@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { Bell, Search, Loader2 } from 'lucide-react';
@@ -29,23 +30,30 @@ const MinimalLayout: React.FC<AppLayoutProps> = ({ children }) => (
 );
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+  const location = useLocation();
   const { loading } = useAuth();
-  const { canAccess } = useAuthGuard();
+  
+  // Routes that don't need authentication guard
+  const publicRoutes = ['/auth', '/access-denied'];
+  const isPublicRoute = publicRoutes.includes(location.pathname);
+  
+  // Only use auth guard for protected routes
+  const authGuard = useAuthGuard();
+  const { canAccess } = isPublicRoute ? { canAccess: true } : authGuard;
 
-  console.log('AppLayout render:', { loading, canAccess });
+  console.log('AppLayout render:', { pathname: location.pathname, loading, canAccess, isPublicRoute });
 
-  // Show loading screen during auth initialization
-  if (loading) {
+  // Show loading screen during auth initialization (only for protected routes)
+  if (loading && !isPublicRoute) {
     return <LoadingScreen />;
   }
 
-  // For unauthenticated users or unauthorized users, 
-  // the useAuthGuard hook will handle redirects
-  if (!canAccess) {
+  // For public routes or when user can't access protected routes
+  if (isPublicRoute || !canAccess) {
     return <MinimalLayout>{children}</MinimalLayout>;
   }
 
-  // Full layout for authenticated users
+  // Full layout for authenticated users on protected routes
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
