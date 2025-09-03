@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { 
   Bell, 
   BellOff, 
@@ -39,8 +39,9 @@ interface NotificationRule {
 }
 
 export default function InsightNotifications() {
-  const { user } = useAuth();
   const { toast } = useToast();
+  // Remove auth dependencies for now  
+  const user = null; // Remove user dependency
   const [alerts, setAlerts] = useState<InsightAlert[]>([]);
   const [rules, setRules] = useState<NotificationRule[]>([]);
   const [loading, setLoading] = useState(true);

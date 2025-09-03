@@ -26,7 +26,7 @@ import {
   BarChart3,
   Lightbulb
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -68,8 +68,9 @@ const settingsItems = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const location = useLocation();
-  const { user, signOut } = useAuth();
+  // Remove auth dependencies for now
+  const user = null; // Remove user dependency  
+  const signOut = () => {}; // Remove signOut dependency
   
   const currentPath = location.pathname;
   const isActive = (path: string) => currentPath === path || (path !== '/' && currentPath.startsWith(path));
@@ -79,7 +80,7 @@ export function AppSidebar() {
       ? "bg-sidebar-accent text-sidebar-primary-foreground font-medium border-r-4 border-sidebar-primary" 
       : "hover:bg-sidebar-accent/50 text-sidebar-foreground";
 
-  const userInitials = user?.email?.[0]?.toUpperCase() || 'U';
+  const userInitials = 'U'; // Default initials
   const collapsed = state === 'collapsed';
 
   return (
@@ -181,7 +182,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">
-                {user?.email}
+                usuário@sistema.com
               </p>
               <p className="text-xs text-sidebar-foreground/70 truncate">
                 Membro

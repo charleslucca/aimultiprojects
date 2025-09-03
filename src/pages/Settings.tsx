@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,10 @@ import {
 } from 'lucide-react';
 
 const Settings = () => {
-  const { user, loading, signOut } = useAuth();
+  // Remove auth dependencies for now
+  const user = null;
+  const loading = false;
+  const signOut = () => {};
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 

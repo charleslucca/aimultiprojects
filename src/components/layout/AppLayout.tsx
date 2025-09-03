@@ -1,65 +1,15 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
-import { Bell, Search, Loader2 } from 'lucide-react';
+import { Bell, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '@/contexts/AuthContext';
-import { useAuthGuard } from '@/hooks/useAuthGuard';
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-// Loading screen component
-const LoadingScreen = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="text-center space-y-4">
-      <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-      <p className="text-muted-foreground">Carregando aplicação...</p>
-    </div>
-  </div>
-);
-
-// Minimal layout for auth pages
-const MinimalLayout: React.FC<AppLayoutProps> = ({ children }) => (
-  <div className="min-h-screen bg-background">
-    {children}
-  </div>
-);
-
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
-  const location = useLocation();
-  const { user, loading, isAuthorized } = useAuth();
-  
-  // Routes that don't need authentication guard
-  const publicRoutes = ['/auth', '/access-denied'];
-  const isPublicRoute = publicRoutes.includes(location.pathname);
-  
-  console.log('🔍 AppLayout DEBUG:', { 
-    pathname: location.pathname, 
-    user: user?.email,
-    loading, 
-    isAuthorized,
-    isPublicRoute 
-  });
-  
-  // Always call useAuthGuard but disable redirects for public routes
-  const authGuard = useAuthGuard(!isPublicRoute);
-  const canAccess = isPublicRoute || authGuard.canAccess;
-
-  // Show loading screen during auth initialization (only for protected routes)
-  if (loading && !isPublicRoute) {
-    return <LoadingScreen />;
-  }
-
-  // For public routes or when user can't access protected routes
-  if (isPublicRoute || !canAccess) {
-    return <MinimalLayout>{children}</MinimalLayout>;
-  }
-
-  // Full layout for authenticated users on protected routes
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">

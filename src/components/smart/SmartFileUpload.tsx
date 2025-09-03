@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+
 import { useToast } from "@/hooks/use-toast";
 import {
   FileUp,
@@ -65,7 +65,8 @@ export function SmartFileUpload({
   maxSize = 50 * 1024 * 1024, // 50MB
   className
 }: SmartFileUploadProps) {
-  const { user } = useAuth();
+  // Remove auth dependencies for now
+  const user = null; // Remove user dependency
   const { toast } = useToast();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState<UploadProgress[]>([]);

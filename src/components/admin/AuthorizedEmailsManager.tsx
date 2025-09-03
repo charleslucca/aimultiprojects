@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Plus, Mail, Trash2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+
 
 interface AuthorizedEmail {
   id: string;
@@ -26,7 +26,8 @@ export const AuthorizedEmailsManager = () => {
   const [loading, setLoading] = useState(false);
   const [loadingEmails, setLoadingEmails] = useState(true);
   const { toast } = useToast();
-  const { isAuthorized } = useAuth();
+  // Remove auth dependencies for now
+  const isAuthorized = true; // Allow all access since auth is removed
 
   // Load authorized emails on component mount
   useEffect(() => {

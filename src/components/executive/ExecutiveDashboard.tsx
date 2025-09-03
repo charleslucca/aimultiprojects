@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -68,8 +68,9 @@ interface Project {
 }
 
 export default function ExecutiveDashboard() {
-  const { user } = useAuth();
   const { toast } = useToast();
+  // Remove auth dependencies for now
+  const user = null; // Remove user dependency
   const [reports, setReports] = useState<ExecutiveReport[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedReport, setSelectedReport] = useState<ExecutiveReport | null>(null);

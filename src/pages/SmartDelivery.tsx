@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
@@ -66,7 +66,8 @@ const DELIVERY_MODULES = [
 export default function SmartDelivery() {
   const navigate = useNavigate();
   const { sessionId } = useParams();
-  const { user } = useAuth();
+  // Remove auth dependencies for now
+  const user = null;
   const { toast } = useToast();
 
   const [sessions, setSessions] = useState<DeliverySession[]>([]);

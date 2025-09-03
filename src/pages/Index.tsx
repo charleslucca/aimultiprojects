@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,14 @@ import {
 } from 'lucide-react';
 
 const Index = () => {
-  const { user, session, loading, signIn, signUp, signOut, refreshAuth } = useAuth();
+  // Remove auth dependencies for now
+  const user = null;
+  const session = null;
+  const loading = false;
+  const signIn = () => {};
+  const signUp = () => {};
+  const signOut = () => {};
+  const refreshAuth = () => {};
 
   if (loading) {
     return (

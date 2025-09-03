@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/contexts/AuthContext";
+
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { SmartFileUpload } from "./SmartFileUpload";
@@ -35,7 +35,8 @@ interface ProductExpertChatProps {
 }
 
 export function ProductExpertChat({ chatId, onChatCreated }: ProductExpertChatProps) {
-  const { user } = useAuth();
+  // Remove auth dependencies for now
+  const user = null; // Remove user dependency
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState("");

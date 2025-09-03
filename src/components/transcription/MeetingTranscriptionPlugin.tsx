@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
+
 import {
   Mic,
   Upload,
@@ -48,7 +48,8 @@ export default function MeetingTranscriptionPlugin({
   clientId,
   onTranscriptionComplete
 }: MeetingTranscriptionPluginProps = {}) {
-  const { user } = useAuth();
+  // Remove auth dependencies for now
+  const user = null; // Remove user dependency
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
