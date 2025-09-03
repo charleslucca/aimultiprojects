@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { AuthorizedEmailsManager } from '@/components/admin/AuthorizedEmailsManager';
 import { 
   User, 
   Building, 
@@ -451,78 +452,83 @@ const Settings = () => {
 
         {/* Security Tab */}
         <TabsContent value="security">
-          <Card className="glass-card">
-            <CardHeader>
-              <CardTitle>Segurança da Conta</CardTitle>
-              <CardDescription>
-                Gerencie a segurança da sua conta e senhas
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium mb-2">Alterar Senha</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="currentPassword">Senha Atual</Label>
-                      <Input
-                        id="currentPassword"
-                        type="password"
-                        placeholder="••••••••"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="newPassword">Nova Senha</Label>
-                      <Input
-                        id="newPassword"
-                        type="password"
-                        placeholder="••••••••"
-                      />
-                    </div>
-                  </div>
-                  <Button className="mt-4">
-                    <Key className="h-4 w-4 mr-2" />
-                    Alterar Senha
-                  </Button>
-                </div>
-
-                <Separator />
-
-                <div>
-                  <h4 className="font-medium mb-2">Sessões Ativas</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Gerencie onde você está logado
-                  </p>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 rounded-lg border border-border/50">
-                      <div>
-                        <p className="font-medium">Navegador Atual</p>
-                        <p className="text-sm text-muted-foreground">Chrome • São Paulo, Brasil</p>
+          <div className="space-y-6">
+            <Card className="glass-card">
+              <CardHeader>
+                <CardTitle>Segurança da Conta</CardTitle>
+                <CardDescription>
+                  Gerencie a segurança da sua conta e senhas
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Alterar Senha</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="currentPassword">Senha Atual</Label>
+                        <Input
+                          id="currentPassword"
+                          type="password"
+                          placeholder="••••••••"
+                        />
                       </div>
-                      <Badge variant="secondary">Ativo</Badge>
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">Nova Senha</Label>
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          placeholder="••••••••"
+                        />
+                      </div>
+                    </div>
+                    <Button className="mt-4">
+                      <Key className="h-4 w-4 mr-2" />
+                      Alterar Senha
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="font-medium mb-2">Sessões Ativas</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Gerencie onde você está logado
+                    </p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 rounded-lg border border-border/50">
+                        <div>
+                          <p className="font-medium">Navegador Atual</p>
+                          <p className="text-sm text-muted-foreground">Chrome • São Paulo, Brasil</p>
+                        </div>
+                        <Badge variant="secondary">Ativo</Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div>
+                    <h4 className="font-medium mb-2 text-destructive">Zona de Perigo</h4>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Ações irreversíveis para sua conta
+                    </p>
+                    <div className="space-y-3">
+                      <Button variant="outline" onClick={signOut}>
+                        Sair de Todas as Sessões
+                      </Button>
+                      <Button variant="destructive">
+                        Excluir Conta
+                      </Button>
                     </div>
                   </div>
                 </div>
-
-                <Separator />
-
-                <div>
-                  <h4 className="font-medium mb-2 text-destructive">Zona de Perigo</h4>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Ações irreversíveis para sua conta
-                  </p>
-                  <div className="space-y-3">
-                    <Button variant="outline" onClick={signOut}>
-                      Sair de Todas as Sessões
-                    </Button>
-                    <Button variant="destructive">
-                      Excluir Conta
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+            
+            {/* Authorized Emails Manager */}
+            <AuthorizedEmailsManager />
+          </div>
         </TabsContent>
 
         {/* Advanced Tab */}
